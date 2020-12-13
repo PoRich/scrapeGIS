@@ -1,0 +1,17 @@
+{
+  "name": "node_scraper",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "pg": "^8.5.1",
+    "puppeteer": "^5.5.0",
+    "zip": "^1.2.0"
+  }
+}
