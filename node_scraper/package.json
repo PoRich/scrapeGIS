@@ -14,6 +14,7 @@
     "pg": "^8.5.1",
     "pg-format": "^1.0.4",
     "puppeteer": "^5.5.0",
+    "puppeteer-firefox": "^0.5.1",
     "unzip": "^0.1.11",
     "zip": "^1.2.0"
   },
