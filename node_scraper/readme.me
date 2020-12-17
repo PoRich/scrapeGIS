@@ -8,6 +8,6 @@ const repl = require('repl');
 .load ./script.js
 '''
 
-### log
+### log (from cwd of the respective scripts)
 node index.js > ./logs/log-file.txt 2> ./logs/error-file.txt
-
+node c42101.js > ../logs/log-file.txt 2> ../logs/error-file.txt

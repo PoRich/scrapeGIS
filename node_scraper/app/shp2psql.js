@@ -5,7 +5,8 @@ const fs = require('fs');
 const http = require('http');
 const https = require('https');
 const path = require('path');
-const puppeteer = require('puppeteer')
+const puppeteer = require('puppeteer');
+const puppeteerFirefox = require('puppeteer-firefox');
 const unzip = require('unzip');
 
 
@@ -29,6 +30,18 @@ const findFile = function(dir, regex_pattern) {
 
 
 module.exports = {
+    // generates folder path name (does not clear folder)
+    async getDestination(county_fsip, tableName){
+        return new Promise((resolve, reject) => {
+            const app_folder = path.dirname(path.parse(__dirname).dir);  // 2 levels up
+            const staging_folder = path.join(app_folder, 'tmp', `${county_fsip}_${tableName}_tmp`);  // specific tmp folder 
+            const destination = path.join(staging_folder, `${tableName}.zip`)
+            exec(`mkdir ${staging_folder}`)
+            process.chdir(path.join(app_folder, 'tmp'))
+            console.log(`Created destination file path: ${destination}`)
+            resolve(destination);
+        })
+    },
     // creates an empty temporary folder path 
     async prepTmpPath(county_fsip, tableName){
         return new Promise((resolve, reject) => {
@@ -73,13 +86,13 @@ module.exports = {
 
     // downloads shp file via Puppeteer with tableName as ${COUNTY_CODE}_${DESCRIPTION}
     async pDownload(url, destination){
-        console.log(`Puppeteer downloading ${url} to ${destination}...`);
         const staging_folder = path.dirname(destination);
+        console.log(`Puppeteer downloading ${url} to ${staging_folder}...`);
         try {
-            const browser = await puppeteer.launch({headless: true});
+            const browser = await puppeteer.launch({headless: false});
             const page = await browser.newPage();
 
-            await page.setDefaultNavigationTimeout(1000*60*2);  // 2 min default timeout
+            await page.setDefaultNavigationTimeout(1000*60*3);  // 3 min default timeout
             await page._client.send('Page.setDownloadBehavior',
                 {behavior: 'allow', downloadPath: staging_folder});
             try{
@@ -118,7 +131,7 @@ module.exports = {
             const num_files = await fileNames.length;
             let file_size = zipFileStats.size
             console.log(`${num_files} files found; file is ${file_size/(1000000)} Mb; download speed is ~${downloadSpeed} Mb/s`)
-                if (num_files == 1 && zipFileStats.size > 0){  //if files were downloaded
+                if (num_files == 1 && zipFileStats.size > 0){  //if files were downloaded, TODO set min to 10kbs
                     var zipFileStats2 = fs.statSync(zipFilePath, (err, stat)=>{return stat})
                     var downloadSpeed = (zipFileStats2.size - zipFileStats.size) / 1000000
                     if (downloadSpeed > 0) {
@@ -136,6 +149,9 @@ module.exports = {
         let stagingFolder = path.parse(zipFilePath).dir
         return new Promise((resolve, reject) => {
             try{
+                //get the first file in the folder path (in case the destination name is wrong)
+                const fileNames = fs.readdirSync(stagingFolder);  // access the file from disk
+                zipFilePath = path.join(stagingFolder, fileNames[0]); // should only be one file
                 console.log(`Unzipping '${zipFilePath}'...`);
                 //Note: the archive is unzipped to the directory it resides in
                 fs.createReadStream(zipFilePath)
