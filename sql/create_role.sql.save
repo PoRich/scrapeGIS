@@ -8,7 +8,7 @@ GRANT CONNECT, CREATE, TEMPORARY ON DATABASE reiq to reiq_admin;
 GRANT USAGE, CREATE ON SCHEMA admin, parcel, parcel_data, parcel_staging, housing, housing_data, demo, demo_data to reiq_admin;
 
 GRANT SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER ON ALL TABLES IN SCHEMA 
-admin, parcel, parcel_data, parcel_staging, housing, housing_data, demo, demo_data TO reiq_admin;
+admin, parcel, parcel_data, parce_staging, housing, housing_data, demo, demo_data TO reiq_admin;
 
 -- give privileges to future roles 
 ALTER DEFAULT PRIVILEGES IN SCHEMA admin, parcel, parcel_data, parcel_staging, housing, housing_data, demo, demo_data 
