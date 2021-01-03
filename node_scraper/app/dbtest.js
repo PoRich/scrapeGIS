@@ -40,7 +40,7 @@ async function save(uri, f,m,l){
 }
 
 // load from db
-db.query('SELECT uri::text[] FROM tools.whitepages WHERE l=$1',['main_dir']).then(res =>{
+db.query('SELECT uri::text[] FROM tools.whitepages WHERE depth=$1',['2']).then(res =>{
     let links = res.rows[0]['uri'];
     //console.log(typeof(links));
     console.log(links[1]);
