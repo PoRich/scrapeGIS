@@ -16,12 +16,23 @@ db.query(sql_cmd, (err, res) =>{
     }
 });
 
-db.query('SELECT COUNT(*) FROM parcel_staging.agent', (err, res) =>{
+db.query('SELECT COUNT(*) FROM reiq.addrs', (err, res) =>{
         console.log(res.rows);  //if return first row: res.rows[0] 
         if (err){
             console.log(`Error: ${err.stack}`)
         }
 });
+
+
+(async function() {
+    db.query('SELECT COUNT(*) FROM reiq.addrs', (err, res) =>{
+        console.log(res.rows);  //if return first row: res.rows[0] 
+        if (err){
+            console.log(`Error: ${err.stack}`)
+        }
+        return res.rows[0]; 
+    });
+})();
 
 
 // async function 
