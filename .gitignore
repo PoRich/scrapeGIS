@@ -47,6 +47,9 @@ web_modules/
 # TypeScript cache
 *.tsbuildinfo
 
+# Temporary files
+../tmp/
+
 # Optional npm cache directory
 .npm
 
@@ -115,3 +118,23 @@ dist
 .yarn/build-state.yml
 .yarn/install-state.gz
 .pnp.*
+
+
+# MISC OTHER
+*.DS_Store
+../.DS_Store
+.vscode/launch.json
+bash_scraper/scraper_error_log.txt
+node_scraper/package-lock.json
+node_scraper/package.json
+.DS_Store
+.eslintrc.json
+.prettierrc.json
+.yarnrc.yml
+../python_scraper/.DS_Store
+python_scraper/.env~
+*.env
+*.env~
+python_scraper/app/__pycache__/
+python_scraper/venv/
+tmp/
