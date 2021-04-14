@@ -18,20 +18,7 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO reiq_admin;
 GRANT USAGE ON ALL SEQUENCES IN SCHEMA admin, code_map, parcel, parcel_data, housing, housing_data, demo, demo_data, reiq TO reiq_admin;
 
 ALTER DEFAULT PRIVILEGES IN SCHEMA admin, code_map, parcel, parcel_data, housing, housing_data, demo, demo_data, reiq GRANT USAGE ON SEQUENCES TO reiq_admin;
-=======
-GRANT USAGE, CREATE ON SCHEMA admin, parcel, parcel_data, parcel_staging, housing, housing_data, demo, demo_data to reiq_admin;
 
-GRANT SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER ON ALL TABLES IN SCHEMA 
-admin, parcel, parcel_data, parcel_staging, housing, housing_data, demo, demo_data TO reiq_admin;
-
--- give privileges to future roles 
-ALTER DEFAULT PRIVILEGES IN SCHEMA admin, parcel, parcel_data, parcel_staging, housing, housing_data, demo, demo_data 
-GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO reiq_admin;
-
-GRANT USAGE ON ALL SEQUENCES IN SCHEMA admin, parcel, parcel_data, parcel_staging, housing, housing_data, demo, demo_data TO reiq_admin;
-
-ALTER DEFAULT PRIVILEGES IN SCHEMA admin, parcel, parcel_data, parcel_staging, housing, housing_data, demo, demo_data GRANT USAGE ON SEQUENCES TO reiq_admin;
->>>>>>> 10c01d0550d03a41d49540c07b7593df63d03dae
 
 CREATE USER reiq WITH LOGIN PASSWORD 'password';
 GRANT reiq_admin TO reiq;
