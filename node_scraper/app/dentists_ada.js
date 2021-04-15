@@ -29,7 +29,7 @@ require('dotenv').config();
 // GLOBAL VARIABLES
 let parentURL = 'https://findadentist.ada.org';
 var target = {};
-    target['state'] = 'IL';  // select a state to scrape
+    target['state'] = 'DE';  // select a state to scrape
     target['city'] = '[not_scraped]';  
 
 // *************************** Scraping ***************************
