@@ -51,16 +51,16 @@ async function initial_scrape() {
     let page = await browser.newPage();
     await preparePageForTests(page);
     
-    // pull city to scrape from db
-    var _target = await getTargetCity('IL'); 
+    // pull initial target from db
+    var _target = await getTargetCity(); 
 
     while (_target){
         // scrape summary listings for each city 
         target['city'] =  _target[0];
         target['state'] = _target[1];
-        //target['county'] = _target[2];
+        target['county'] = _target[2];
 
-        console.log(`========= SCRAPING city: ${target['city']}, state ${target['state']} ==============`);
+        console.log(`========= SCRAPING city: ${target['city']}, state ${target['state']}, county ${target['county']}==============`);
         var url = `https://www.yelp.com/search?find_desc=Dentists&find_loc=${target['city']}%2C+${target['state']}`
 
         var p = await scrape(url, page)
@@ -132,7 +132,7 @@ src, last_update from dental_data.yelp
 where addr is null and biz_name is not null order by biz_name, src;
 
 
-select distinct city, state from dental_data.yelp where addr is null and biz_name is not null; 
+select distinct city, county, state from dental_data.yelp where addr is null and biz_name is not null; 
 */
 /*
 
@@ -309,14 +309,14 @@ async function saveBiz(payload, _target, url){
     try{
         await db.query('BEGIN');
         const queryText = 'INSERT INTO dental_data.yelp(biz_name, specialty, phone, addr, \
-                            y_stars, y_reviews, city, district, state_abbrev, src, y_profile) \
-                            VALUES($1, $2, $3, $4, $5, $6, initcap($7), initcap($8), upper($9), $10, $11) \
+                            y_stars, y_reviews, city, district, state_abbrev, county, src, y_profile) \
+                            VALUES($1, $2, $3, $4, $5, $6, initcap($7), initcap($8), upper($9), initcap($10), $11, $12) \
                             ON CONFLICT ON CONSTRAINT yelp_biz_name_addr_key \
                             DO UPDATE SET (y_stars, y_reviews, y_profile, last_update) = (EXCLUDED.y_stars, EXCLUDED.y_reviews, EXCLUDED.y_profile, now()) RETURNING d_id';
         await db.query(queryText, [payload['name'], payload['desc'], payload['phone'], 
                                   payload['addr'], payload['rating'], payload['numRatings'],
                                   _target['city'], _target['district'], 
-                                  _target['state'], url, payload['profile']]);
+                                  _target['state'], _target['county'], url, payload['profile']]);
         await db.query('COMMIT');
     } catch (e) {
         await db.query('ROLLBACK');
@@ -328,9 +328,9 @@ async function updateMetaStatus(_currentPage, _totalPages, _target){
     try{
         await db.query('BEGIN');
         const queryText = 'update dental_data.meta set (y_status, y_max_pages) = ($1, $2) \
-                           where state_abbrev=upper($3) and city=initcap($4)';
+                           where state_abbrev=upper($3) and county=initcap($4) and city=initcap($5)';
         await db.query(queryText, [_currentPage, _totalPages, 
-                                   _target['state'], _target['city'] ]);
+                                   _target['state'], _target['county'], _target['city'] ]);
         await db.query('COMMIT');
     } catch (e) {
         await db.query('ROLLBACK');
@@ -344,20 +344,17 @@ async function updateMetaStatus(_currentPage, _totalPages, _target){
  * @returns array of cities (from ADA scrape) that have not been Yelp scraped
  * TODO - cross reference against tiger.place table
  */
-async function getTargetCity(state){
+async function getTargetCity(){
     try{
-        const queryText = 'select regexp_split_to_array((select concat_ws(\',\', city, state_abbrev) \
-                    from dental_data.meta\
-                    where (yelp_stat <> yelp_max or yelp_max is null) and \
-                        state_abbr=$1 limit 1), \',\') as target;'
-        var res = await db.query(queryText, [state]);
+        const queryText = 'select regexp_split_to_array((select concat_ws(\',\', city, state_abbrev, county) \
+                           from dental_data.meta where city is not null and city <> \'[not_scraped]\' and \
+                           (y_max_pages is null or y_status <> y_max_pages) limit 1), \',\') as target';
+        var res = await db.query(queryText);
         return res['rows'][0]['target']
     } catch (e) {
         throw e
     }   
 }
-
-
 
 
 async function getProfileLinks(){
