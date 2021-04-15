@@ -257,14 +257,21 @@ async function getNames(url, page, gethtml=false) {
     
     /* SQL commands to find where the scraper left off
     select wp_id, depth, raw from tools.whitepages where depth like 'b%' order by 1 desc limit 1000;
-    -- latest data from depth b-102-017
-    delete from tools.whitepages where depth='b-102-017';
+    -- latest data from depth w-024-062
+    delete from tools.whitepages where depth='p-068-027' or depth='g-113-087';
     -- find uri for that depth (4154774)
-    select wp_id, depth, uri from tools.whitepages where depth='4' and uri like '%b-102-017';
-     */
-
+    select wp_id, depth, uri from tools.whitepages where depth='4' and uri like '%r-001-001';
+    
+    4 processes
+    1) Descending from Ds g-113-087 -> Ms              const nameRes = await db.query('SELECT uri FROM tools.whitepages WHERE depth=$1 and wp_id>=$2 ORDER BY 1', ['4', '4281143'])
+    2) Ascending from Ws s-189-114 -> Ms               const nameRes = await db.query('SELECT uri FROM tools.whitepages WHERE depth=$1 and wp_id<= $2 ORDER BY 1 desc', ['4', '4542504'])
+    3) Descending from Ms p-068-027 ->Z 4387119       const nameRes = await db.query('SELECT uri FROM tools.whitepages WHERE depth=$1 and wp_id>= $2 ORDER BY 1', ['4', '4461248'])
+    4) Ascending from Ls h-110-101 ->A 4361951        const nameRes = await db.query('SELECT uri FROM tools.whitepages WHERE depth=$1 and wp_id<= $2 ORDER BY 1 desc', ['4', '4337068']) 
+    5) Descending from Rs r-001-001 ->S              const nameRes = await db.query('SELECT uri FROM tools.whitepages WHERE depth=$1 and wp_id>= $2 ORDER BY 1', ['4', '4479847']) 
+    */
+   
     console.log(`connecting to database at ${process.env.PGHOST}:${process.env.PGPORT}`);
-    const nameRes = await db.query('SELECT uri FROM tools.whitepages WHERE depth=$1 and wp_id >=$2 ORDER BY 1', ['4', 4154770])
+    const nameRes = await db.query('SELECT uri FROM tools.whitepages WHERE depth=$1 and wp_id< $2 ORDER BY 1 DESC', ['4', '4504415']) 
     let namelinks = []; 
     for (let r of nameRes.rows){ 
         namelinks.push(r['uri']);
@@ -282,6 +289,8 @@ async function getNames(url, page, gethtml=false) {
                 await page.goto(l, { waitUntil: 'networkidle2'} )
             } catch (e) {
                 console.log(`unable to go to ${l}`)
+                console.log(`retrying to navigating to ${l}`)
+                await page.goto(l, { waitUntil: 'networkidle2'} )
             }  
             /*
             await page.waitForTimeout(rand_num(500, 2500));
