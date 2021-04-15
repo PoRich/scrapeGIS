@@ -30,153 +30,6 @@ await page.setViewport({  // set screen resolution
  });
 }
 
-
-
-// =================== STEP 1: INITIAL SCRAPE ===================
-
-var target = {};
-
-(async () => {
-    initial_scrape()
-        .then()
-})();
-
-/**
- * takes ADA list of cities and saves help search results 
- *  @result null;
- */
-async function initial_scrape() {
-    // prep chronium 
-    let browser = await puppeteerExtra.launch({headless: true});
-    let page = await browser.newPage();
-    await preparePageForTests(page);
-    
-    // pull initial target from db
-    var _target = await getTargetCity(); 
-
-    while (_target){
-        // scrape summary listings for each city 
-        target['city'] =  _target[0];
-        target['state'] = _target[1];
-        target['county'] = _target[2];
-
-        console.log(`========= SCRAPING city: ${target['city']}, state ${target['state']}, county ${target['county']}==============`);
-        var url = `https://www.yelp.com/search?find_desc=Dentists&find_loc=${target['city']}%2C+${target['state']}`
-
-        var p = await scrape(url, page)
-        var bizData = p[1];
-        var totalPages = p[0];
-
-        for(let i=0; i<bizData.length; i=i+1){
-            console.log(`profile ${bizData[i]['profile']}`)
-            await saveBiz(bizData[i], target, url)
-            console.log(`Saved ${bizData[i]['name']} to db`)
-        }
-        await updateMetaStatus(1, totalPages, target);
-
-        for(let j=2; j<=totalPages; j=j+1){
-            url = `https://www.yelp.com/search?find_desc=Dentists&find_loc=${target['city']}%2C+${target['state']}&start=${(j-1)*10}`
-            p = await scrape(url, page)
-            if (p == -1){ // no results detected
-                continue 
-            } 
-            else if (p.length == 2) {
-                bizData = p[1];    
-                for(let k=0; k<bizData.length; k=k+1){
-                    await saveBiz(bizData[k], target, url)
-                    console.log(`Saved ${bizData[k]['name']} to db`)
-                }
-                await updateMetaStatus(j, totalPages, target);
-            }
-
-    }
-    // get next target 
-    _target = await getTargetCity(); 
-    }
-
-    await browser.close();
-}
-
-// =================== STEP 2: GET FULL ADDRESSES of Company's Profile page ===================
-// reset 786 -1 addresses 3/20/21 9 AM EST
-
-(async () => {
-    let browser = await puppeteerExtra.launch({headless: true});
-    let page = await browser.newPage();
-    // pull initial targets from db
-    var _targetList = await getProfileLinks();  // list of objects with keys d_id, and y_profile
-    var targetObj
-    while(_targetList.length > 0){
-        targetObj = _targetList.pop();
-        var addrPayload = await scrapeAddress(targetObj['y_profile'], page);
-        await saveFullAddr(targetObj['d_id'], addrPayload);
-        console.log(`saved ${addrPayload[0]} ${addrPayload[1]} --> d_id: ${targetObj['d_id']}`)
-    }
-
-    await browser.close();
-})();
-
-
-
-// =================== STEP X: GET MISSING ADDRESSES ===================
-/*
-// 2163 missing addresses 
- select distinct count(src) from dental_data.yelp where addr is null and biz_name is not null; 
- select array(select distinct src from dental_data.yelp where addr is null and biz_name is not null order by src); 
-
-select biz_name, 
---addr, 
---phone, specialty, 
--- y_stars, y_reviews,
-src, last_update from dental_data.yelp 
-where addr is null and biz_name is not null order by biz_name, src;
-
-
-select distinct city, county, state from dental_data.yelp where addr is null and biz_name is not null; 
-*/
-/*
-
-(async () => {
-    // prep chronium 
-    let browser = await puppeteerExtra.launch({headless: true});
-    let page = await browser.newPage();
-    await preparePageForTests(page);
-    
-    // pull urls where address is missing from db
-    var URLs = await getIncompleteURLs(); 
-    var target_regex = /find_loc=(.*)%2C\+([A-Z]{2,2})/
-    
-    while (URLs.length > 0){
-        var url = URLs.pop()
-        console.log(`url: ${url}`)
-        target['city'] =  target_regex.exec(url)[1];
-        target['state'] = target_regex.exec(url)[2];
-        var countyQueryText = 'select county from dental_data.meta where city ~* $1 and state_abbrev ~* $2;';
-        target['county'] = db.query(countyQueryText, [ target['city'], target['state'] ]);
-
-        var p = await scrape(url, page)
-        var bizData = p[1];
-
-        var updateStatusText;
-        try{
-            for(let i=0; i<bizData.length; i=i+1){
-                await saveBiz(bizData[i], target, url)
-                console.log(`Saved ${bizData[i]['name']} @ ${bizData[i]['addr']} to db`)
-            }
-            updateStatusText = 'update biz.dentists_redo set u_status=1 where url=$1;';
-        } catch(e){
-            console.log(`failed to scrape ${url}: ${e}`)
-            updateStatusText = 'update biz.dentists_redo set u_status=-1 where url=$1;';
-        }
-        db.query(updateStatusText, [ url ]);
-    }
-
-    await browser.close();
-})();
- */
-
-// ============================== HELPER FUNCTIONS ============================== 
-
 // Generates proxy api url 
 function proxy_url(targetURL){
     // check scraperapi proxy account
@@ -283,22 +136,9 @@ async function scrapeAddress(pageURL, page){
 
     const payload = await page.evaluate(() => {
         var fullAddr = document.querySelector('p[class=" css-1h1j0y3"] > p[class=" css-e81eai"]') ? document.querySelector('p[class=" css-1h1j0y3"] > p[class=" css-e81eai"]').innerText : -1;
-        var district = document.querySelector('p[class=" css-m6anxm"] > span') ? document.querySelector('p[class=" css-m6anxm"] > span').innerText : -1; 
-        var sideBox = document.querySelectorAll('div[class=" arrange-unit__373c0__1piwO arrange-unit-fill__373c0__17z0h border-color--default__373c0__2oFDT"] >p[class=" css-1h1j0y3"]') ? document.querySelectorAll('div[class=" arrange-unit__373c0__1piwO arrange-unit-fill__373c0__17z0h border-color--default__373c0__2oFDT"] >p[class=" css-1h1j0y3"]') : -1;
+        var location = document.querySelector('p[class=" css-m6anxm"] > span') ? document.querySelector('p[class=" css-m6anxm"] > span').innerText : -1; 
+        return [fullAddr, location];
 
-        var phone_regex = /\(\d\d\d\) \d\d\d/;
-        var website_regex = /\.(org|net|com?)$/;
-        let phone = "";
-        let website = "";
-        for(let i=0; i<sideBox.length; i=i+1){
-            if (phone_regex.exec(sideBox[i].innerText)) {
-                phone = sideBox[i].innerText;
-            }
-            else if (website_regex.exec(sideBox[i].innerText)) {
-                website = sideBox[i].innerText;
-            }
-        }
-        return [fullAddr, district, phone, website];
     })
     return payload;
     }
@@ -308,10 +148,10 @@ async function scrapeAddress(pageURL, page){
 async function saveBiz(payload, _target, url){
     try{
         await db.query('BEGIN');
-        const queryText = 'INSERT INTO dental_data.yelp(biz_name, specialty, phone, addr, \
+        const queryText = 'INSERT INTO biz.dentists(raw_biz, specialty, raw_phone, raw_st_addr, \
                             y_stars, y_reviews, city, district, state_abbrev, county, src, y_profile) \
                             VALUES($1, $2, $3, $4, $5, $6, initcap($7), initcap($8), upper($9), initcap($10), $11, $12) \
-                            ON CONFLICT ON CONSTRAINT yelp_biz_name_addr_key \
+                            ON CONFLICT ON CONSTRAINT dentists_raw_biz_raw_st_addr \
                             DO UPDATE SET (y_stars, y_reviews, y_profile, last_update) = (EXCLUDED.y_stars, EXCLUDED.y_reviews, EXCLUDED.y_profile, now()) RETURNING d_id';
         await db.query(queryText, [payload['name'], payload['desc'], payload['phone'], 
                                   payload['addr'], payload['rating'], payload['numRatings'],
@@ -327,7 +167,7 @@ async function saveBiz(payload, _target, url){
 async function updateMetaStatus(_currentPage, _totalPages, _target){
     try{
         await db.query('BEGIN');
-        const queryText = 'update dental_data.meta set (y_status, y_max_pages) = ($1, $2) \
+        const queryText = 'update biz.dentists_meta set (y_status, y_max_pages) = ($1, $2) \
                            where state_abbrev=upper($3) and county=initcap($4) and city=initcap($5)';
         await db.query(queryText, [_currentPage, _totalPages, 
                                    _target['state'], _target['county'], _target['city'] ]);
@@ -339,15 +179,10 @@ async function updateMetaStatus(_currentPage, _totalPages, _target){
 }
 
 
-/**
- * 
- * @returns array of cities (from ADA scrape) that have not been Yelp scraped
- * TODO - cross reference against tiger.place table
- */
 async function getTargetCity(){
     try{
         const queryText = 'select regexp_split_to_array((select concat_ws(\',\', city, state_abbrev, county) \
-                           from dental_data.meta where city is not null and city <> \'[not_scraped]\' and \
+                           from biz.dentists_meta where city is not null and city <> \'[not_scraped]\' and \
                            (y_max_pages is null or y_status <> y_max_pages) limit 1), \',\') as target';
         var res = await db.query(queryText);
         return res['rows'][0]['target']
@@ -359,7 +194,7 @@ async function getTargetCity(){
 
 async function getProfileLinks(){
     try{
-        const queryText = 'select d_id, y_profile from dental_data.yelp where addr is null order by d_id';
+        const queryText = 'select d_id, y_profile from biz.dentists where raw_addr is null order by d_id';
         var res = await db.query(queryText);
         //console.log(res['rows'])
         return res['rows']
@@ -372,9 +207,9 @@ async function getProfileLinks(){
 async function saveFullAddr(_d_id, _addrPayload){
     try{
         await db.query('BEGIN');
-        const queryText = 'update dental_data.yelp set addr = $1, district = $2 \
-                           phone=$3, website=$4, where d_id=$5';
-        await db.query(queryText, [_addrPayload[0], _addrPayload[1], _addrPayload[2], _addrPayload[3], _d_id]);
+        const queryText = 'update biz.dentists set raw_addr = $1, raw_location = $2 \
+                           where d_id=$3';
+        await db.query(queryText, [_addrPayload[0], _addrPayload[1], _d_id]);
         await db.query('COMMIT');
     } catch (e) {
         await db.query('ROLLBACK');
@@ -385,7 +220,7 @@ async function saveFullAddr(_d_id, _addrPayload){
 
 async function getIncompleteURLs(){
 /* Before using this function, run the following SQL code block to gather urls needing redo:
-insert into biz.dentists_redo(url) select distinct src from dental_data.yelp where addr is null and biz_name is not null order by src;
+insert into biz.dentists_redo(url) select distinct src from biz.dentists where raw_st_addr is null and raw_biz is not null order by src;
 */
     try{
         const queryText = 'select array(select url from biz.dentists_redo where u_status is null order by url) as url';
@@ -396,3 +231,137 @@ insert into biz.dentists_redo(url) select distinct src from dental_data.yelp whe
     }   
 }
 
+
+// =================== STEP 1: INITIAL SCRAPE ===================
+
+var target = {};
+/*
+(async () => {
+    // prep chronium 
+    let browser = await puppeteerExtra.launch({headless: true});
+    let page = await browser.newPage();
+    await preparePageForTests(page);
+    
+    // pull initial target from db
+    var _target = await getTargetCity(); 
+
+    while (_target){
+
+    target['city'] =  _target[0];
+    target['state'] = _target[1];
+    target['county'] = _target[2];
+
+    console.log(`========= SCRAPING city: ${target['city']}, state ${target['state']}, county ${target['county']}==============`);
+    var url = `https://www.yelp.com/search?find_desc=Dentists&find_loc=${target['city']}%2C+${target['state']}`
+
+    var p = await scrape(url, page)
+    var bizData = p[1];
+    var totalPages = p[0];
+
+    for(let i=0; i<bizData.length; i=i+1){
+        console.log(`profile ${bizData[i]['profile']}`)
+        await saveBiz(bizData[i], target, url)
+        console.log(`Saved ${bizData[i]['name']} to db`)
+    }
+    await updateMetaStatus(1, totalPages, target);
+
+    for(let j=2; j<=totalPages; j=j+1){
+        url = `https://www.yelp.com/search?find_desc=Dentists&find_loc=${target['city']}%2C+${target['state']}&start=${(j-1)*10}`
+        p = await scrape(url, page)
+        if (p == -1){ // no results detected
+            continue 
+        } 
+        else if (p.length == 2) {
+            bizData = p[1];    
+            for(let k=0; k<bizData.length; k=k+1){
+                await saveBiz(bizData[k], target, url)
+                console.log(`Saved ${bizData[k]['name']} to db`)
+            }
+            await updateMetaStatus(j, totalPages, target);
+        }
+
+    }
+    // get next target 
+    _target = await getTargetCity(); 
+    }
+
+    await browser.close();
+})();
+*/
+// =================== STEP 2: GET FULL ADDRESSES ===================
+// reset 786 -1 addresses 3/20/21 9 AM EST
+
+(async () => {
+    let browser = await puppeteerExtra.launch({headless: true});
+    let page = await browser.newPage();
+    // pull initial targets from db
+    var _targetList = await getProfileLinks();  // list of objects with keys d_id, and y_profile
+    var targetObj
+    while(_targetList.length > 0){
+        targetObj = _targetList.pop();
+        var addrPayload = await scrapeAddress(targetObj['y_profile'], page);
+        await saveFullAddr(targetObj['d_id'], addrPayload);
+        console.log(`saved ${addrPayload[0]} ${addrPayload[1]} --> d_id: ${targetObj['d_id']}`)
+    }
+
+    await browser.close();
+})();
+
+
+
+// =================== STEP X: GET MISSING ADDRESSES ===================
+/*
+// 2163 missing addresses 
+ select distinct count(src) from biz.dentists where raw_st_addr is null and raw_biz is not null; 
+ select array(select distinct src from biz.dentists where raw_st_addr is null and raw_biz is not null order by src); 
+
+select raw_biz, 
+--raw_st_addr, 
+--raw_phone, specialty, 
+-- y_stars, y_reviews,
+src, last_update from biz.dentists 
+where raw_st_addr is null and raw_biz is not null order by raw_biz, src;
+
+
+select distinct city, county, state from biz.dentists where raw_st_addr is null and raw_biz is not null; 
+*/
+/*
+
+(async () => {
+    // prep chronium 
+    let browser = await puppeteerExtra.launch({headless: true});
+    let page = await browser.newPage();
+    await preparePageForTests(page);
+    
+    // pull urls where address is missing from db
+    var URLs = await getIncompleteURLs(); 
+    var target_regex = /find_loc=(.*)%2C\+([A-Z]{2,2})/
+    
+    while (URLs.length > 0){
+        var url = URLs.pop()
+        console.log(`url: ${url}`)
+        target['city'] =  target_regex.exec(url)[1];
+        target['state'] = target_regex.exec(url)[2];
+        var countyQueryText = 'select county from biz.dentists_meta where city ~* $1 and state_abbrev ~* $2;';
+        target['county'] = db.query(countyQueryText, [ target['city'], target['state'] ]);
+
+        var p = await scrape(url, page)
+        var bizData = p[1];
+
+        var updateStatusText;
+        try{
+            for(let i=0; i<bizData.length; i=i+1){
+                await saveBiz(bizData[i], target, url)
+                console.log(`Saved ${bizData[i]['name']} @ ${bizData[i]['addr']} to db`)
+            }
+            updateStatusText = 'update biz.dentists_redo set u_status=1 where url=$1;';
+        } catch(e){
+            console.log(`failed to scrape ${url}: ${e}`)
+            updateStatusText = 'update biz.dentists_redo set u_status=-1 where url=$1;';
+        }
+        db.query(updateStatusText, [ url ]);
+    }
+
+    await browser.close();
+})();
+ */
