@@ -36,7 +36,7 @@ var target = {};
 (async () =>{
     // start browser & open new page 
     let browser = await puppeteerExtra.launch({
-        headless: true, 
+        headless: false, 
         //args: ['--proxy-server=127.0.0.1:8123'] // ['--lang=en-US,en']  // look like a human
     });
     let page = await browser.newPage();
@@ -316,7 +316,7 @@ async function saveCity(state_abbrev, county, city){
 async function savePagination(state_abbrev, county, city, ada_max_pages){
     try{
         await db.query('BEGIN');
-        const queryText = 'INSERT INTO dental_data.meta(state_abbrev, county, city, ada_max_pages, ada_status) VALUES($1, $2, $3, $4, $5) ON CONFLICT ON CONSTRAINT meta_state_abbrev_county_city_key DO UPDATE SET ada_max_pages = EXCLUDED.ada_max_pages RETURNING l_id';
+        const queryText = 'INSERT INTO biz.dentists_meta(state_abbrev, county, city, ada_max_pages, ada_status) VALUES($1, $2, $3, $4, $5) ON CONFLICT ON CONSTRAINT dentists_meta_state_abbrev_county_city_key DO UPDATE SET ada_max_pages = EXCLUDED.ada_max_pages RETURNING l_id';
         const res = await db.query(queryText, [state_abbrev.toUpperCase(), county, city, ada_max_pages, 0]);
         await db.query('COMMIT');
     } catch (e) {
@@ -325,11 +325,10 @@ async function savePagination(state_abbrev, county, city, ada_max_pages){
     }
 }
 
-
 async function saveDentist(state_abbrev, county, city, photo_src, specialty, raw_name, raw_phone, raw_addr, src){
     try{
         await db.query('BEGIN');
-        const queryText = 'INSERT INTO dental_data.ada(state_abbrev, county, city, photo_src, specialty, dentist_name, phone, addr, src) VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9) ON CONFLICT ON CONSTRAINT ada_dentist_name_addr_key DO NOTHING RETURNING d_id';
+        const queryText = 'INSERT INTO biz.dentists(state_abbrev, county, city, photo_src, specialty, raw_name, raw_phone, raw_addr, src) VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9) ON CONFLICT ON CONSTRAINT dentists_raw_name_raw_addr_key DO NOTHING RETURNING d_id';
         const res = await db.query(queryText, [state_abbrev.toUpperCase(), county, city, photo_src, specialty, raw_name, raw_phone, raw_addr, src]);
         await db.query('COMMIT');
     } catch (e) {
@@ -376,7 +375,7 @@ async function countyScrape(url, target, page){
         pageNumber = Number(regex.exec(url)[0]);
     }
     // update status for targetCity
-    const queryText = 'UPDATE dental_data.meta set ada_status=$1 where state_abbrev=$2 and county=$3 and city=$4';
+    const queryText = 'UPDATE biz.dentists_meta set ada_status=$1 where state_abbrev=$2 and county=$3 and city=$4';
     const res = await db.query(queryText, [pageNumber, state_abbrev.toUpperCase(), targetCounty, targetCity]);
     console.log(`db l_update status ${pageNumber} for ${state_abbrev}, ${targetCounty}`);
 }
@@ -385,7 +384,7 @@ async function getDBPages(state_abbrev, county, city){
     // maximum number of pages in a county, city from db
     try{
         await db.query('BEGIN');
-        const queryText = 'SELECT ada_max_pages from dental_data.meta where state_abbrev=upper($1) and county=$2 and city=$3 limit 1';
+        const queryText = 'SELECT ada_max_pages from biz.dentists_meta where state_abbrev=upper($1) and county=$2 and city=$3 limit 1';
         const res = await db.query(queryText, [state_abbrev, county, city]);
         await db.query('COMMIT');
         return res['rows'][0]['ada_max_pages']
@@ -399,7 +398,7 @@ async function getDBCounties(state_abbrev){
     // get list of cities in a state from db
     try{
         await db.query('BEGIN');
-        const queryText = 'SELECT array(SELECT county from dental_data.meta where state_abbrev=upper($1) and ada_status is not null and ada_status <> ada_max_pages ) as counties'; 
+        const queryText = 'SELECT array(SELECT county from biz.dentists_meta where state_abbrev=upper($1) and ada_status is not null and ada_status <> ada_max_pages ) as counties'; 
         const res = await db.query(queryText, [state_abbrev]);
         await db.query('COMMIT');
         return res['rows'][0]['counties']
@@ -414,7 +413,7 @@ async function getDBCities(state_abbrev, county){
     // get list of cities in a state from db
     try{
         await db.query('BEGIN');
-        const queryText = 'SELECT array(SELECT city from dental_data.meta where state_abbrev=$1 and county=$2 and city is not null and city <> $$[not_scraped]$$) as cities';
+        const queryText = 'SELECT array(SELECT city from biz.dentists_meta where state_abbrev=$1 and county=$2 and city is not null and city <> $$[not_scraped]$$) as cities';
         const res = await db.query(queryText, [state_abbrev, county]);
         await db.query('COMMIT');
         return res['rows'][0]['cities']
