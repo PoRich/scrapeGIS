@@ -292,7 +292,7 @@ async function getDentists(pageURL, page){ // input is county-level url https://
 async function saveCounty(state_abbrev, county){
     try{
         await db.query('BEGIN');
-        const queryText = 'SELECT biz.get_dentist_county($1, $2)';
+        const queryText = 'SELECT dental.get_dentist_county($1, $2)';
         const res = await db.query(queryText, [state_abbrev, county]);
         await db.query('COMMIT');
     } catch (e) {
@@ -304,7 +304,7 @@ async function saveCounty(state_abbrev, county){
 async function saveCity(state_abbrev, county, city){
     try{
         await db.query('BEGIN');
-        const queryText = 'SELECT biz.get_dentist_city(upper($1), $2, $3)';
+        const queryText = 'SELECT dental.get_dentist_city(upper($1), $2, $3)';
         const res = await db.query(queryText, [state_abbrev, county, city]);
         await db.query('COMMIT');
     } catch (e) {
