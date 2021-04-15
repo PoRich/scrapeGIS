@@ -2,8 +2,8 @@
 
 ### DENTISTS 
 1. ADA - gives list of locations 
-    1. 
-    2. `$ node app/dentists.js`
+    1. set target['state'] variable; TODO - scrape all states 
+    2. `$ node app/dentists_ada.js` from node_scraper root folder 
 2. YELP
 3. YELLOW PAGES
 4. GOOGLE MAPS
