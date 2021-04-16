@@ -74,7 +74,8 @@ var target = {};
             let relevantResults = 0
             var url = `https://www.yellowpages.com/${target['city']}-${target['state']}/dentists?page=${pageNum}`
             var bizData = await scrapeYP(url, page) // scrape general search results 
-            if (bizData == -1){  // if no search results 
+            console.log(`bizData: ${json.stringify(bizData)}`)
+            if (bizData == -1 || !bizData || bizData.length == 0){  // if no search results 
                 console.log(`No search results for ${target['city']}-${target['state']}`)
                 break
             } 
