@@ -130,18 +130,23 @@ async function scrapeYP(pageURL, page){
         var parentElement = Array.from(document.querySelectorAll('div[class="info"]'));
         // Gather desired elements
         var bizPayload = parentElement.map(function (e, i){
-            let currentYear = new Date().getFullYear();
-            return { // preprocess
-                biz_name: e.querySelectorAll('a[class="business-name"]')[0].innerText,
-                specialty: e.querySelectorAll('div[class="categories"]').length > 0 ? e.querySelectorAll('div[class="categories"]')[0].innerText : null,
-                yearsInBiz: e.querySelectorAll('div[class="years-in-business"] > div[class="count"]').length > 0 ? currentYear - Number(e.querySelectorAll('div[class="years-in-business"] > div[class="count"]')[0].innerText): null,
-                profile_url: e.querySelectorAll('a[class="business-name"]')[0].href,
-                rating: e.querySelector('div[class="ratings"] > a[class="rating"]') ? e.querySelector('div[class="ratings"] > a[class="rating"]').firstElementChild.className.replace("result-rating ","").trim() : null,
-                numRatings: e.querySelectorAll('div[class="ratings"] > a[class="rating"]') ? e.querySelectorAll('div[class="ratings"] > a[class="rating"]')[0].innerText : null, 
-                website: e.querySelector('div[class="links"]') ? e.querySelector('div[class="links"]').firstElementChild.href : null, 
-                phone: e.querySelector(".phone") ? e.querySelector(".phone").innerText : null, 
-                addr: e.querySelector('div[class="street-address"]') ? e.querySelector('div[class="street-address"]').innerText : null,
-                locality: e.querySelector('div[class="locality"]') ? e.querySelector('div[class="locality"]').innerText : null
+            try{
+                let currentYear = new Date().getFullYear();
+                let scraped_data = { // preprocess
+                    biz_name: e.querySelectorAll('a[class="business-name"]')[0].innerText,
+                    specialty: e.querySelectorAll('div[class="categories"]').length > 0 ? e.querySelectorAll('div[class="categories"]')[0].innerText : null,
+                    yearsInBiz: e.querySelectorAll('div[class="years-in-business"] > div[class="count"]').length > 0 ? currentYear - Number(e.querySelectorAll('div[class="years-in-business"] > div[class="count"]')[0].innerText): null,
+                    profile_url: e.querySelectorAll('a[class="business-name"]')[0].href,
+                    rating: e.querySelector('div[class="ratings"] > a[class="rating"]') ? e.querySelector('div[class="ratings"] > a[class="rating"]').firstElementChild.className.replace("result-rating ","").trim() : null,
+                    numRatings: e.querySelectorAll('div[class="ratings"] > a[class="rating"]') ? e.querySelectorAll('div[class="ratings"] > a[class="rating"]')[0].innerText : null, 
+                    website: e.querySelector('div[class="links"]') ? e.querySelector('div[class="links"]').firstElementChild.href : null, 
+                    phone: e.querySelector(".phone") ? e.querySelector(".phone").innerText : null, 
+                    addr: e.querySelector('div[class="street-address"]') ? e.querySelector('div[class="street-address"]').innerText : null,
+                    locality: e.querySelector('div[class="locality"]') ? e.querySelector('div[class="locality"]').innerText : null
+                    }
+                return scraped_data;
+            } catch(e){
+                console.log(e);
             }
         });
         /*
