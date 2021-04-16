@@ -250,6 +250,7 @@ async function getDentists(pageURL, page){ // input is county-level url https://
             let htmlContent = element.innerHTML
             let regex = / src=\"(.*)\"\salt=/i;
             return {photo_src: regex.exec(htmlContent)[1], 
+                    profile_url: element.querySelector('.photo > a').href,
                    specialty: element.firstElementChild.children[1].innerText, 
                    raw_name: element.firstElementChild.children[2].innerText, 
                    raw_phone: element.firstElementChild.children[3].innerText,
@@ -325,12 +326,12 @@ async function savePagination(state_abbrev, county, city, ada_max_pages){
     }
 }
 
-
-async function saveDentist(state_abbrev, county, city, photo_src, specialty, raw_name, raw_phone, raw_addr, src){
+// TODO test profile_url 
+async function saveDentist(state_abbrev, county, city, photo_src, specialty, raw_name, raw_phone, raw_addr, src, profile_url){
     try{
         await db.query('BEGIN');
-        const queryText = 'INSERT INTO dental_data.ada(state_abbrev, county, city, photo_src, specialty, dentist_name, phone, addr, src) VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9) ON CONFLICT ON CONSTRAINT ada_dentist_name_addr_key DO NOTHING RETURNING d_id';
-        const res = await db.query(queryText, [state_abbrev.toUpperCase(), county, city, photo_src, specialty, raw_name, raw_phone, raw_addr, src]);
+        const queryText = 'INSERT INTO dental_data.ada(state_abbrev, county, city, photo_src, specialty, dentist_name, phone, addr, src, profile_url) VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) ON CONFLICT ON CONSTRAINT ada_dentist_name_addr_key DO NOTHING RETURNING d_id';
+        const res = await db.query(queryText, [state_abbrev.toUpperCase(), county, city, photo_src, specialty, raw_name, raw_phone, raw_addr, src, profile_url]);
         await db.query('COMMIT');
     } catch (e) {
         await db.query('ROLLBACK');
@@ -362,7 +363,7 @@ async function countyScrape(url, target, page){
     var dentistObjects = payload[2];
     for (let k=0; k < dentistObjects.length; k=k+1){
         let d = dentistObjects[k];
-        await saveDentist(state_abbrev, targetCounty, targetCity, d.photo_src, d.specialty, d.raw_name, d.raw_phone, d.raw_addr, url);
+        await saveDentist(state_abbrev, targetCounty, targetCity, d.photo_src, d.specialty, d.raw_name, d.raw_phone, d.raw_addr, url, d.profile_url);
         console.log(`saved: ${d.raw_name} @ ${d.raw_addr}`)
     } 
 
