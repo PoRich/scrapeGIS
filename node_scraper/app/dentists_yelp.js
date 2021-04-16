@@ -44,7 +44,7 @@ var target = {};
 })();
 
 /**
- * takes ADA list of cities and saves help search results 
+ * takes tiger list of cities and saves help search results 
  *  @result null;
  */
 async function initial_scrape() {
@@ -64,7 +64,7 @@ async function initial_scrape() {
         target['state'] = _target[1];
         //target['county'] = _target[2];
 
-        console.log(`========= SCRAPING city: ${target['city']}, state ${target['state']} ==============`);
+        console.log(`========= SCRAPING YELP city: ${target['city']}, state ${target['state']} ==============`);
         var url = `https://www.yelp.com/search?find_desc=Dentists&find_loc=${target['city']}%2C+${target['state']}`
 
         var p = await scrape(url, page) // scrape general search results 
@@ -225,7 +225,7 @@ async function scrape(pageURL, page){
         var pre = parentElement.map(function (e, i){
             return {
                 name: e.firstElementChild.querySelectorAll('a[class="css-166la90"]'), // [0].innerText, 
-                desc: e.firstElementChild.querySelectorAll('p[class=" css-n6i4z7"]'), // [0].innerText,
+                specialty: e.firstElementChild.querySelectorAll('p[class=" css-n6i4z7"]'), // [0].innerText,
                 rating: e.firstElementChild.querySelectorAll('div[class=" attribute__09f24__3znwq display--inline-block__09f24__3L1EB margin-r1__09f24__BCulR border-color--default__09f24__1eOdn"]'),
                 numRatings: e.firstElementChild.querySelectorAll('span[class="reviewCount__09f24__EUXPN css-e81eai"]'), // [0].innerText,
                 phone: e.lastElementChild.querySelectorAll('p[class=" css-8jxw1i"]'), // [0].innerText,
@@ -240,7 +240,7 @@ async function scrape(pageURL, page){
             return {
                 name: e.name[0].innerText, 
                 profile: e.name[0].href,
-                desc: e.desc.length == 1 ? e.desc[0].innerText : null,
+                specialty: e.specialty.length == 1 ? e.specialty[0].innerText : null,
                 rating: e.rating.length == 1 ? Number(rating_regex.exec(e.rating[0].innerHTML)[1]) : null,
                 numRatings: e.numRatings.length == 1 ? Number(e.numRatings[0].innerText) : null,
                 phone: e.phone.length >= 1 ? (phone_regex.exec(e.phone[0].innerText) ? e.phone[0].innerText : null) : null,
@@ -316,7 +316,7 @@ async function saveBiz(payload, _target, url){
                             VALUES($1, $2, $3, $4, $5, $6, initcap($7), initcap($8), upper($9), $10, $11) \
                             ON CONFLICT ON CONSTRAINT yelp_biz_name_addr_key \
                             DO UPDATE SET (y_stars, y_reviews, y_profile, last_update) = (EXCLUDED.y_stars, EXCLUDED.y_reviews, EXCLUDED.y_profile, now()) RETURNING d_id';
-        await db.query(queryText, [payload['name'], payload['desc'], payload['phone'], 
+        await db.query(queryText, [payload['name'], payload['specialty'], payload['phone'], 
                                   payload['addr'], payload['rating'], payload['numRatings'],
                                   _target['city'], _target['district'], 
                                   _target['state'], url, payload['profile']]);
