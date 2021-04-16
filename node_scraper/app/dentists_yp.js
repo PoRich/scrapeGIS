@@ -81,7 +81,7 @@ var target = {};
             else {
                 // save detail for individual business
                 for(let i=0; i<bizData.length; i=i+1){
-                    console.log(`profile ${bizData[i]['profile']}`)
+                    console.log(`profile ${bizData[i]['profile_url']}`)
                     await saveBizYP(bizData[i], target, url)
                     console.log(`Saved ${bizData[i]['name']} to db`)
                     // count the number of results actually in the target city 
