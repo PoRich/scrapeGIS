@@ -34,11 +34,13 @@ await page.setViewport({  // set screen resolution
 
 // =================== STEP 1: INITIAL SCRAPE ===================
 
+const targetState = 'IL';
 var target = {};
 
 (async () => {
+    // TODO - need to run these manually one after the other 
     initial_scrape()
-        .then(detail_scrape)
+        .then(detail_scrape);
 })();
 
 /**
@@ -52,7 +54,9 @@ async function initial_scrape() {
     await preparePageForTests(page);
     
     // pull city to scrape from db
-    var _target = await getTargetCity('DE'); 
+
+    var _target = await getTargetCity(targetState); 
+    console.log(`_target ${_target}`)
 
     while (_target){
         // scrape summary listings for each city 
@@ -91,14 +95,13 @@ async function initial_scrape() {
 
     }
     // get next target 
-    _target = await getTargetCity(); 
+    _target = await getTargetCity(targetState); 
     }
 
     await browser.close();
 }
 
 // =================== STEP 2: GET FULL ADDRESSES of Company's Profile page ===================
-// reset 786 -1 addresses 3/20/21 9 AM EST
 
 async function detail_scrape() {
     let browser = await puppeteerExtra.launch({headless: true});
@@ -327,7 +330,7 @@ async function saveBiz(payload, _target, url){
 async function updateMetaStatus(_currentPage, _totalPages, _target){
     try{
         await db.query('BEGIN');
-        const queryText = 'update dental_data.meta set (y_status, y_max_pages) = ($1, $2) \
+        const queryText = 'update dental_data.meta set (yelp_status, yelp_max_pages) = ($1, $2) \
                            where state_abbrev=upper($3) and city=initcap($4)';
         await db.query(queryText, [_currentPage, _totalPages, 
                                    _target['state'], _target['city'] ]);
@@ -348,8 +351,8 @@ async function getTargetCity(state){
     try{
         const queryText = 'select regexp_split_to_array((select concat_ws(\',\', city, state_abbrev) \
                     from dental_data.meta\
-                    where (yelp_stat <> yelp_max or yelp_max is null) and \
-                        state_abbr=$1 limit 1), \',\') as target;'
+                    where (yelp_status <> yelp_max_pages or yelp_max_pages is null) and \
+                        state_abbrev=$1 limit 1), \',\') as target;'
         var res = await db.query(queryText, [state]);
         return res['rows'][0]['target']
     } catch (e) {
@@ -375,7 +378,7 @@ async function getProfileLinks(){
 async function saveFullAddr(_d_id, _addrPayload){
     try{
         await db.query('BEGIN');
-        const queryText = 'update dental_data.yelp set addr = $1, district = $2 \
+        const queryText = 'update dental_data.yelp set addr = $1, district = $2, \
                            phone=$3, website=$4, where d_id=$5';
         await db.query(queryText, [_addrPayload[0], _addrPayload[1], _addrPayload[2], _addrPayload[3], _d_id]);
         await db.query('COMMIT');

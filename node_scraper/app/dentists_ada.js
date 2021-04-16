@@ -29,14 +29,14 @@ require('dotenv').config();
 // GLOBAL VARIABLES
 let parentURL = 'https://findadentist.ada.org';
 var target = {};
-    target['state'] = 'IL';  // select a state to scrape
+    target['state'] = 'PA';  // select a state to scrape
     target['city'] = '[not_scraped]';  
 
 // *************************** Scraping ***************************
 (async () =>{
     // start browser & open new page 
     let browser = await puppeteerExtra.launch({
-        headless: true, 
+        headless: false, 
         //args: ['--proxy-server=127.0.0.1:8123'] // ['--lang=en-US,en']  // look like a human
     });
     let page = await browser.newPage();
@@ -52,7 +52,7 @@ var target = {};
     } catch (error) {
         console.log(`failed to open the page: ${stateURL} with error: ${error}`);
     }
-    
+/*
     // =================== PART 1A: map counties for this state
     var masterCountyList = await getChildLinks(stateURL, page);
 
@@ -77,7 +77,7 @@ var target = {};
         var pageOneURL = `${parentURL}/${target['state']}/${target['county']}`;
         await countyScrape(pageOneURL, target, page);  // could instead loop through each county scrape by city (if there were many more cities than counties)
     };
-
+*/
     // ================== PART 2: crawl remaining pages <> 1 ==================
     // loop through the list of counties again - scraping pages <> 1
     var countiesMP = await getDBCounties(target['state']);  // copy list of counties to track progress of 2nd pass crawl (MP for more pages)
