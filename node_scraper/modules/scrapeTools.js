@@ -1,3 +1,5 @@
+const db = require('../db')
+
 module.exports = {
     /**
      * @state state abbreviation to filter for cities
@@ -44,5 +46,25 @@ module.exports = {
       Math.random() * (max - min) + min
     )
     },
+    async updateMetaStatus(_currentPage, _totalPages, _target, site){
+        let queryText = "";
+        if (site == 'yelp') {
+            queryText = 'update dental_data.meta set (yelp_status, yelp_max_pages) = ($1, $2) \
+                               where state_abbrev=upper($3) and city=initcap($4)';
+        } else if (site == 'yp'){
+            queryText = 'update dental_data.meta set (yp_status, yp_max_pages) = ($1, $2) \
+                               where state_abbrev=upper($3) and city=initcap($4)';
+        }
+        try{
+            await db.query('BEGIN');
+            
+            await db.query(queryText, [_currentPage, _totalPages, 
+                                       _target['state'], _target['city'] ]);
+            await db.query('COMMIT');
+        } catch (e) {
+            await db.query('ROLLBACK');
+            throw e
+        }
+    }
 
 }
