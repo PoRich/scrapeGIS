@@ -37,14 +37,18 @@ await page.setViewport({  // set screen resolution
 
 // =================== STEP 1: INITIAL SCRAPE ===================
 
-const targetState = 'IL';
+//const targetState = 'IL';
 var target = {};
+(async () => {
+    initial_scrape('IL');
+})();
+
 
 /**
  * takes tiger list of cities and saves help search results 
  *  @result null;
  */
- async function initial_scrape() {
+ async function initial_scrape(targetState) {
     // prep chronium 
     let browser = await puppeteerExtra.launch({headless: true});
     let page = await browser.newPage();
