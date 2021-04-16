@@ -52,7 +52,7 @@ async function initial_scrape() {
     await preparePageForTests(page);
     
     // pull city to scrape from db
-    var _target = await getTargetCity('IL'); 
+    var _target = await getTargetCity('DE'); 
 
     while (_target){
         // scrape summary listings for each city 
@@ -63,7 +63,7 @@ async function initial_scrape() {
         console.log(`========= SCRAPING city: ${target['city']}, state ${target['state']} ==============`);
         var url = `https://www.yelp.com/search?find_desc=Dentists&find_loc=${target['city']}%2C+${target['state']}`
 
-        var p = await scrape(url, page)
+        var p = await scrape(url, page) // scrape general search results 
         var bizData = p[1];
         var totalPages = p[0];
 
@@ -80,7 +80,7 @@ async function initial_scrape() {
             if (p == -1){ // no results detected
                 continue 
             } 
-            else if (p.length == 2) {
+            else if (p.length == 2) { // first item is the page number
                 bizData = p[1];    
                 for(let k=0; k<bizData.length; k=k+1){
                     await saveBiz(bizData[k], target, url)
