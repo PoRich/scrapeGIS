@@ -118,7 +118,7 @@ async function scrapeYP(pageURL, page){
         })
 
     try{
-        await page.waitForSelector('a[class="css-166la90"]', {timeout: 48000});
+        await page.waitForSelector('div[class="info"]"]', {timeout: 48000});
     } catch (e) {
         console.log(`No results on page: ${e}`)
         return -1;
