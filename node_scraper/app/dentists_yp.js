@@ -133,7 +133,7 @@ async function scrapeYP(pageURL, page){
                 yearEst: e.querySelectorAll('div[class="years-in-business"] > div[class="count"]') ? currentYear - Number(e.querySelectorAll('div[class="years-in-business"] > div[class="count"]')[0].innerText) : null,
                 profile_url: e.querySelectorAll('a[class="business-name"]') ? e.querySelectorAll('a[class="business-name"]')[0].href : null,
                 rating: e.querySelector('div[class="ratings"] > a[class="rating"]') ? e.querySelector('div[class="ratings"] > a[class="rating"]').firstElementChild.className.replace("result-rating ","").trim() : null,
-                numRatings: e.querySelectorAll('div[class="ratings"] > a[class="rating"]') ? e.querySelectorAll('div[class="ratings"] > a[class="rating"]')[0]?.innerText : null, 
+                numRatings: e.querySelectorAll('div[class="ratings"] > a[class="rating"]') ? e.querySelectorAll('div[class="ratings"] > a[class="rating"]')[0].innerText : null, 
                 website: e.querySelector('div[class="links"]').firstElementChild ? e.querySelector('div[class="links"]').firstElementChild.href : null, 
                 phone: e.querySelector(".phone") ? e.querySelector(".phone").innerText : null, 
                 addr: e.querySelector('div[class="street-address"]') ? e.querySelector('div[class="street-address"]').innerText : null,
