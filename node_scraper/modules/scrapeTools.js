@@ -24,7 +24,7 @@ module.exports = {
             } else if (site == 'yp') {
                 let queryText = 'select regexp_split_to_array((select concat_ws(\',\', city, state_abbrev) \
                                 from dental_data.meta\
-                                where (yp_status < 5 or yp_max_pages is null) and \
+                                where yp_max_pages is null and \
                                 state_abbrev=$1 limit 1), \',\') as target;'
                 try{    
                     let res = await db.query(queryText, [state]);

@@ -34,7 +34,7 @@ await page.setViewport({  // set screen resolution
 
 // =================== STEP 1: INITIAL SCRAPE ===================
 
-const targetState = 'IL';
+const targetState = 'PA';
 var target = {};
 
 (async () => {
