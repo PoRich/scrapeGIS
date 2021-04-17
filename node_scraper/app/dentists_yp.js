@@ -39,7 +39,7 @@ await page.setViewport({  // set screen resolution
 
 var target = {};
 (async () => {
-    initial_scrape('PA');
+    initial_scrape('IL');
 })();
 
 
@@ -93,6 +93,7 @@ var target = {};
                 await ScrapeTools.updateMetaStatus(pageNum, pageNum, target, 'yp');
                 // move on to the next page if there are relevant results, up to page 5
                 pageNum += 1; 
+                // scraper may not reach page 5 if there are no results on a page less than 5
                 nextPage = (relevantResults > 0 || pageNum <= 5) ? true : false;
             }
         }
