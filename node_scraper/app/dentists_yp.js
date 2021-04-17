@@ -37,10 +37,9 @@ await page.setViewport({  // set screen resolution
 
 // =================== STEP 1: INITIAL SCRAPE ===================
 
-//const targetState = 'IL';
 var target = {};
 (async () => {
-    initial_scrape('IL');
+    initial_scrape('PA');
 })();
 
 
@@ -106,10 +105,11 @@ var target = {};
 
 async function scrapeYP(pageURL, page){
     try { // try to go to URL
-        await page.goto(pageURL, { waitUntil: 'load', timeout: 1000} );
+        await page.goto(pageURL, { waitUntil: 'load', timeout: 10000} );
         console.log(`opened the page ${pageURL}`);
     } catch (error) {
         console.log(`failed to open the page: ${pageURL} with error: ${error}`);
+        return -1;
     }
 
     /// act human
@@ -121,7 +121,7 @@ async function scrapeYP(pageURL, page){
         })
 
     try{
-        await page.waitForSelector('div[class="info"]', {timeout: 500});
+        await page.waitForSelector('div[class="info"]', {timeout: 5000});
     } catch (e) {
         console.log(`No results on page: ${e}`)
         return -1;
