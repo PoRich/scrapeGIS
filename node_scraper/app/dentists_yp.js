@@ -57,7 +57,7 @@ var target = {};
     // pull city to scrape from db
 
     var _target = await ScrapeTools.getTargetCity(targetState, 'yp'); 
-    console.log(`_target ${_target}`)
+    console.log(`******* CURRENT TARGET CITY: ${_target} ******`)
 
     while (_target){
         // scrape summary listings for each city 
@@ -71,10 +71,11 @@ var target = {};
         
         // Given a target city, search and save results 
         while (nextPage) {
+            console.log(`***************** SCRAPING PAGE # ${pageNum} of ${target['city']}, ${target['state']} ***************** `);
             let relevantResults = 0
             var url = `https://www.yellowpages.com/${target['city']}-${target['state']}/dentists?page=${pageNum}`
             var bizData = await scrapeYP(url, page) // scrape general search results 
-            console.log(`bizData: ${json.stringify(bizData)}`)
+            //console.log(`bizData: ${JSON.stringify(bizData)}`)
             if (bizData == -1 || !bizData || bizData.length == 0){  // if no search results 
                 console.log(`No search results for ${target['city']}-${target['state']}`)
                 break
@@ -82,12 +83,12 @@ var target = {};
             else {
                 // save detail for individual business
                 for(let i=0; i<bizData.length; i=i+1){
-                    console.log(`profile ${bizData[i]['profile_url']}`)
                     await saveBizYP(bizData[i], target, url)
-                    console.log(`Saved ${bizData[i]['name']} to db`)
+                    console.log(`Saved ${bizData[i]['biz_name']} to db`)
                     // count the number of results actually in the target city 
                     relevantResults = bizData[i]['profile_url'].includes(`${target['city']}-${target['state']}`) ? relevantResults + 1 : relevantResults;
                 }
+                console.log(`${relevantResults} on page`)
                 // update meta tracker
                 await ScrapeTools.updateMetaStatus(pageNum, pageNum, target, 'yp');
                 // move on to the next page if there are relevant results, up to page 5
@@ -133,40 +134,27 @@ async function scrapeYP(pageURL, page){
         var bizPayload = parentElement.map(function (e, i){
             try{
                 let currentYear = new Date().getFullYear();
+                const street_addr = e.querySelectorAll('div[class="street-address"]')[0]?.innerText;
+                const locality = e.querySelectorAll('div[class="locality"]')[0]?.innerText;
                 let scraped_data = { // preprocess
-                    biz_name: e.querySelectorAll('a[class="business-name"]')[0].innerText,
-                    specialty: e.querySelectorAll('div[class="categories"]').length > 0 ? e.querySelectorAll('div[class="categories"]')[0].innerText : null,
-                    yearsInBiz: e.querySelectorAll('div[class="years-in-business"] > div[class="count"]').length > 0 ? currentYear - Number(e.querySelectorAll('div[class="years-in-business"] > div[class="count"]')[0].innerText): null,
+                    biz_name: e.querySelectorAll('a[class="business-name"]')[0]?.innerText,
+                    specialty: e.querySelectorAll('div[class="categories"]')[0]?.innerText,
+                    yearEst: e.querySelectorAll('div[class="years-in-business"] > div[class="count"]') ? String(currentYear - Number(e.querySelectorAll('div[class="years-in-business"] > div[class="count"]')[0]?.innerText)) : null,
                     profile_url: e.querySelectorAll('a[class="business-name"]')[0].href,
-                    rating: e.querySelector('div[class="ratings"] > a[class="rating"]') ? e.querySelector('div[class="ratings"] > a[class="rating"]').firstElementChild.className.replace("result-rating ","").trim() : null,
-                    numRatings: e.querySelectorAll('div[class="ratings"] > a[class="rating"]') ? e.querySelectorAll('div[class="ratings"] > a[class="rating"]')[0].innerText : null, 
-                    website: e.querySelector('div[class="links"]') ? e.querySelector('div[class="links"]').firstElementChild.href : null, 
-                    phone: e.querySelector(".phone") ? e.querySelector(".phone").innerText : null, 
-                    addr: e.querySelector('div[class="street-address"]') ? e.querySelector('div[class="street-address"]').innerText : null,
-                    locality: e.querySelector('div[class="locality"]') ? e.querySelector('div[class="locality"]').innerText : null
-                    }
+                    rating: e.querySelectorAll('span[class="count"]')[0]?.parentElement.className.replace('result-rating ','').trim(),
+                    numRatings: e.querySelectorAll('span[class="count"]')[0]?.innerText, 
+                    website: e.querySelector('div[class="links"]')?.firstElementChild?.href, 
+                    phone: e.querySelectorAll(".phone")[0]?.innerText,  
+                    full_addr: e.querySelectorAll('p[class="adr"]')[0]?.innerText ? e.querySelectorAll('p[class="adr"]')[0]?.innerText : street_addr + ', ' + locality, 
+                    st_addr: street_addr,  
+                    locality: locality,  
+                }
                 return scraped_data;
             } catch(e){
                 console.log(e);
             }
         });
-        /*
-        var bizPayload = pre.map( e => {
-            let currentYear = new Date().getFullYear();
-            return {
-                biz_name: e.biz_name[0].innerText,
-                specialty: e.specialty.length >= 1 ? e.specialty[0].innerText : null,
-                yearEst: e.yearsInBiz.length >= 1 ? currentYear - Number(e.yearsInBiz[0].innerText) : null,
-                profile_url: e.profile_url[0].href,
-                rating: e.rating,
-                numRatings: e.numRatings, 
-                website: e.website, 
-                phone: e.phone, 
-                addr: e.addr,
-                locality: e.locality
-            }
-        })
-        */
+        
         return bizPayload;
     })
     return payload;
@@ -177,14 +165,14 @@ async function saveBizYP(payload, _target, url){
     try{
         await db.query('BEGIN');
         const queryText = 'INSERT INTO dental_data.ypages(biz_name, specialty, year_est, rating, num_reviews, \
-                            website, phone, addr1, addr2, state_abbrev, profile_url, src) \
-                            VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, upper($10), $11, $12) \
-                            ON CONFLICT ON CONSTRAINT yelp_biz_name_addr_key \
+                            website, phone, full_addr, st_addr, locality, state_abbrev, profile_url, src) \
+                            VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, upper($11), $12, $13) \
+                            ON CONFLICT ON CONSTRAINT ypages_biz_name_st_addr_key \
                             DO UPDATE SET (rating, num_reviews, profile_url, last_update) = \
                             (EXCLUDED.rating, EXCLUDED.num_reviews, EXCLUDED.profile_url, now()) RETURNING d_id';
         await db.query(queryText, [payload['biz_name'], payload['specialty'], payload['yearEst'], 
                                   payload['rating'], payload['numRatings'], payload['website'], 
-                                  payload['phone'], payload['addr'], payload['locality'], 
+                                  payload['phone'], payload['full_addr'], payload['st_addr'], payload['locality'], 
                                   _target['state'], payload['profile_url'], url]);
         await db.query('COMMIT');
     } catch (e) {
