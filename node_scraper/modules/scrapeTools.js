@@ -16,6 +16,7 @@ module.exports = {
                                 state_abbrev=$1 limit 1), \',\') as target;'
                 try{    
                     let res = await db.query(queryText, [state]);
+                    console.log(`###### Retrieved target city ${res['rows'][0]['target']} for yelp scraper ######`)
                     return res['rows'][0]['target']
                 } catch (e) {
                     throw e
@@ -23,10 +24,11 @@ module.exports = {
             } else if (site == 'yp') {
                 let queryText = 'select regexp_split_to_array((select concat_ws(\',\', city, state_abbrev) \
                                 from dental_data.meta\
-                                where (yp_status <> yp_max_pages or yp_max_pages is null) and \
+                                where (yp_status < 5 or yp_max_pages is null) and \
                                 state_abbrev=$1 limit 1), \',\') as target;'
                 try{    
                     let res = await db.query(queryText, [state]);
+                    console.log(`###### Retrieved target city ${res['rows'][0]['target']} for ypages scraper ######`)
                     return res['rows'][0]['target']
                 } catch (e) {
                     throw e
@@ -57,10 +59,10 @@ module.exports = {
         }
         try{
             await db.query('BEGIN');
-            
             await db.query(queryText, [_currentPage, _totalPages, 
                                        _target['state'], _target['city'] ]);
             await db.query('COMMIT');
+            console.log(` ######## Updated dental_data.meta yp_status = ${_currentPage} for ${_target['city']}, ${_target['state']} ########`)
         } catch (e) {
             await db.query('ROLLBACK');
             throw e
