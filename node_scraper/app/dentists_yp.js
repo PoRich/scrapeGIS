@@ -73,7 +73,8 @@ var target = {};
         while (nextPage) {
             console.log(`***************** SCRAPING PAGE # ${pageNum} of ${target['city']}, ${target['state']} ***************** `);
             let relevantResults = 0
-            var url = `https://www.yellowpages.com/${target['city']}-${target['state']}/dentists?page=${pageNum}`
+            let localitySearch = `${target['city']}-${target['state']}`.toLowerCase();
+            var url = `https://www.yellowpages.com/${localitySearch}/dentists?page=${pageNum}`
             var bizData = await scrapeYP(url, page) // scrape general search results 
             //console.log(`bizData: ${JSON.stringify(bizData)}`)
             if (bizData == -1 || !bizData || bizData.length == 0){  // if no search results 
@@ -84,11 +85,11 @@ var target = {};
                 // save detail for individual business
                 for(let i=0; i<bizData.length; i=i+1){
                     await saveBizYP(bizData[i], target, url)
-                    console.log(`Saved ${bizData[i]['biz_name']} to db`)
+                    console.log(`Saved/Processed ${bizData[i]['biz_name']} to db`)
                     // count the number of results actually in the target city 
-                    relevantResults = bizData[i]['profile_url'].includes(`${target['city']}-${target['state']}`) ? relevantResults + 1 : relevantResults;
+                    relevantResults = bizData[i]['profile_url'].includes(localitySearch) ? relevantResults + 1 : relevantResults;
                 }
-                console.log(`${relevantResults} on page`)
+                console.log(`================ ${relevantResults} Relevant Results on page ================`)
                 // update meta tracker
                 await ScrapeTools.updateMetaStatus(pageNum, pageNum, target, 'yp');
                 // move on to the next page if there are relevant results, up to page 5
@@ -105,7 +106,7 @@ var target = {};
 
 async function scrapeYP(pageURL, page){
     try { // try to go to URL
-        await page.goto(pageURL, { waitUntil: 'load', timeout: 36000} );
+        await page.goto(pageURL, { waitUntil: 'load', timeout: 1000} );
         console.log(`opened the page ${pageURL}`);
     } catch (error) {
         console.log(`failed to open the page: ${pageURL} with error: ${error}`);
@@ -120,7 +121,7 @@ async function scrapeYP(pageURL, page){
         })
 
     try{
-        await page.waitForSelector('div[class="info"]', {timeout: 48000});
+        await page.waitForSelector('div[class="info"]', {timeout: 500});
     } catch (e) {
         console.log(`No results on page: ${e}`)
         return -1;
@@ -165,15 +166,15 @@ async function saveBizYP(payload, _target, url){
     try{
         await db.query('BEGIN');
         const queryText = 'INSERT INTO dental_data.ypages(biz_name, specialty, year_est, rating, num_reviews, \
-                            website, phone, full_addr, st_addr, locality, state_abbrev, profile_url, src) \
-                            VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, upper($11), $12, $13) \
-                            ON CONFLICT ON CONSTRAINT ypages_biz_name_st_addr_key \
+                            website, phone, full_addr, st_addr, locality, target_city, state_abbrev, profile_url, src) \
+                            VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, upper($12), $13, $14) \
+                            ON CONFLICT ON CONSTRAINT ypages_profile_url_key \
                             DO UPDATE SET (rating, num_reviews, profile_url, last_update) = \
                             (EXCLUDED.rating, EXCLUDED.num_reviews, EXCLUDED.profile_url, now()) RETURNING d_id';
         await db.query(queryText, [payload['biz_name'], payload['specialty'], payload['yearEst'], 
                                   payload['rating'], payload['numRatings'], payload['website'], 
                                   payload['phone'], payload['full_addr'], payload['st_addr'], payload['locality'], 
-                                  _target['state'], payload['profile_url'], url]);
+                                  _target['city'], _target['state'], payload['profile_url'], url]);
         await db.query('COMMIT');
     } catch (e) {
         await db.query('ROLLBACK');
