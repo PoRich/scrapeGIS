@@ -67,7 +67,7 @@ async function initial_scrape() {
         console.log(`========= SCRAPING YELP city: ${target['city']}, state ${target['state']} ==============`);
         var url = `https://www.yelp.com/search?find_desc=Dentists&find_loc=${target['city']}%2C+${target['state']}`
 
-        var p = await scrape(url, page) // scrape general search results 
+        var p = await scrapeSearch(url, page) // scrape general search results 
         var bizData = p[1];
 
         if (bizData){   
@@ -86,7 +86,7 @@ async function initial_scrape() {
         if (totalPages > 1){
             for(let j=2; j<=totalPages; j=j+1){
                 url = `https://www.yelp.com/search?find_desc=Dentists&find_loc=${target['city']}%2C+${target['state']}&start=${(j-1)*10}`
-                p = await scrape(url, page)
+                p = await scrapeSearch(url, page)
                 if (p == -1){ // no results detected
                     continue 
                 } 
@@ -163,7 +163,7 @@ select distinct city, state from dental_data.yelp where addr is null and biz_nam
         var countyQueryText = 'select county from dental_data.meta where city ~* $1 and state_abbrev ~* $2;';
         target['county'] = db.query(countyQueryText, [ target['city'], target['state'] ]);
 
-        var p = await scrape(url, page)
+        var p = await scrapeSearch(url, page)
         var bizData = p[1];
 
         var updateStatusText;
@@ -187,7 +187,7 @@ select distinct city, state from dental_data.yelp where addr is null and biz_nam
 // ============================== HELPER FUNCTIONS ============================== 
 
 
-async function scrape(pageURL, page){
+async function scrapeSearch(pageURL, page){
     try { // try to go to URL
         await page.goto(pageURL, { waitUntil: 'load', timeout: 36000} );
         console.log(`opened the page ${pageURL}`);
@@ -206,8 +206,23 @@ async function scrape(pageURL, page){
     try{
         await page.waitForSelector('a[class="css-166la90"]', {timeout: 48000});
     } catch (e) {
-        console.log(`No results on page: ${e}`)
-        return -1;
+        console.log(`No results on page or Recaptcha : ${e}`)
+        // ==================== RECAPTCHA CODE BLOCK [START] ====================
+        try{
+            await page.waitForSelector('.g-recaptcha"]', {timeout: 15000});
+            await page.solveRecaptchas();  // puppeteer 2captcha plugin
+            await Promise.all([
+                page.waitForNavigation(),
+                page.click('.ybtn.ybtn--primary')
+            ]);
+            var payload2 = scrapeSearch(pageURL, page)
+            console.log(`*************** Recaptcha Solved ***************`)
+            return payload2;
+        } catch (e2) {
+            console.log(`No results on page [no Recaptcha found]: ${e2}`)    
+            return -1;
+        }
+        // ==================== RECAPTCHA CODE BLOCK [END] ====================
     }
 
     // NOTE: $eval is the same as document.querySelector; $$eval is the same as document.querySelectorAll
@@ -283,18 +298,18 @@ async function scrapeAddress(pageURL, page){
         // Either 1) no results or 2) blocked by recaptcha 
         console.log(`No results on page or RECAPTCHA: ${e}`)
         // ==================== RECAPTCHA CODE BLOCK [START] ====================
-        try {
+        try{
+            await page.waitForSelector('.g-recaptcha"]', {timeout: 15000});
             await page.solveRecaptchas();  // puppeteer 2captcha plugin
-
             await Promise.all([
                 page.waitForNavigation(),
-                page.click(' [type="submit"]')
+                page.click('.ybtn.ybtn--primary')
             ]);
-            console.log('recaptcha found & solved');
-        }
-        catch (e) {
-            console.log('no recaptcha found');
-            // signifies that an attempt was made 
+            var payload2 = scrapeSearch(pageURL, page)
+            console.log(`*************** Recaptcha Solved ***************`)
+            return payload2;
+        } catch (e2) {
+            console.log(`No results on page [no Recaptcha found]: ${e2}`)    
             return ['-1', '-1', '-1', '-1'];
         }
         // ==================== RECAPTCHA CODE BLOCK [END] ====================
