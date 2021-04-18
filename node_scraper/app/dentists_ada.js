@@ -1,16 +1,12 @@
-/* 
-https://findadentist.ada.org/pa/philadelphia
-NOTE: RUN THIS FILE FROM THE APP DIR AS 'node app/dentists_ada.js'
-
-https://delpros.delaware.gov/OH_VerifyLicense
-TODO - addresses showing up as 'x miles'
-*/
+// NOTE: RUN THIS FILE FROM THE APP DIR AS 'node app/dentists_ada.js'
+// TODO - addresses showing up as 'x miles'
 const puppeteerExtra = require('puppeteer-extra')  // Any number of plugins can be added through `puppeteer.use()`
 const StealthPlugin = require('puppeteer-extra-plugin-stealth')
 const RecaptchaPlugin = require('puppeteer-extra-plugin-recaptcha')
 const AdblockerPlugin = require('puppeteer-extra-plugin-adblocker')  // Add adblocker plugin to block all ads and trackers (saves bandwidth)
 require('dotenv').config();
 const db = require('../db')
+const ScrapeTools = require('../modules/scrapeTools.js');
 //puppeteerExtra.use(require('puppeteer-extra-plugin-repl')())
 puppeteerExtra.use(StealthPlugin());
 puppeteerExtra.use(AdblockerPlugin({ blockTrackers: true }));
@@ -109,20 +105,6 @@ await page.setViewport({  // set screen resolution
  });
 }
 
-// Generates proxy api url 
-function proxy_url(targetURL){
-    // check scraperapi proxy account
-    // curl "http://api.scraperapi.com/account?api_key=5fa9ed494209abb506dd2ccf7a61d4e2"
-    return `http://api.scraperapi.com/?api_key=${process.env.SCRAPERAPI}&url=${targetURL}&country_code=us`;
-}
-
-// Random num generator (for throttling)
-function rand_num(min, max) {  
-    return Math.floor(
-      Math.random() * (max - min) + min
-    )
-}
-
 // for each state/county, get link for each county/city
 async function getChildLinks(pageURL, page){  
     // to get counties, input is state-level url https://findadentist.ada.org/tx
@@ -139,7 +121,7 @@ async function getChildLinks(pageURL, page){
         x: 0,
         y: 0,
         xDistance: 0,
-        yDistance: - rand_num(0,100),
+        yDistance: - ScrapeTools.rand_num(0,100),
         })
     
     await page.waitForSelector('li[class="column-list__column__item"]', {timeout: 0});
@@ -186,7 +168,7 @@ async function getDentists(pageURL, page){ // input is county-level url https://
         // ==================== RECAPTCHA CODE BLOCK [START] ====================
         try {
             // trigger reCaptcha by going to general-practice url
-            await page.goto(proxy_url('https://findadentist.ada.org/de/kent/dover/general-practice'), { waitUntil: 'load', timeout: 18002} );
+            await page.goto(ScrapeTools.proxy_url('https://findadentist.ada.org/de/kent/dover/general-practice'), { waitUntil: 'load', timeout: 18002} );
 
             //await page.waitForSelector('div[class="high-traffic-captcha-overlay"]', { timeout: 12000 });
             await page.waitForTimeout(9000);
@@ -212,7 +194,7 @@ async function getDentists(pageURL, page){ // input is county-level url https://
         x: 0,
         y: 0,
         xDistance: 0,
-        yDistance: - rand_num(0,100),
+        yDistance: - ScrapeTools.rand_num(0,100),
         })
 
     try{
@@ -223,7 +205,7 @@ async function getDentists(pageURL, page){ // input is county-level url https://
         // ==================== RECAPTCHA CODE BLOCK [START] ====================
         try {
             // trigger reCaptcha by going to general-practice url
-            await page.goto(proxy_url('https://findadentist.ada.org/de/kent/dover/general-practice'), { waitUntil: 'load', timeout: 18004} );
+            await page.goto(ScrapeTools.proxy_url('https://findadentist.ada.org/de/kent/dover/general-practice'), { waitUntil: 'load', timeout: 18004} );
 
             //await page.waitForSelector('div[class="high-traffic-captcha-overlay"]', { timeout: 12000 });
             await page.waitForTimeout(9003);
@@ -346,7 +328,7 @@ async function countyScrape(url, target, page){
     var targetCounty = target['county'];
     var targetCity = target['city'];  // if few cities in each county; scrape county rather than city to minimize HTTP requests
 
-    let payload = await getDentists(proxy_url(url), page)
+    let payload = await getDentists(ScrapeTools.proxy_url(url), page)
     
     // save pagination 
     var totalPages = payload[0];
