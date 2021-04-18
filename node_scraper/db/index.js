@@ -10,10 +10,10 @@ module.exports = {
         const duration = Date.now() - start
         
         if(res && res.Count){
-          console.log('Executed db query', { text, duration, rows: res.rowCount });
+          //console.log('Executed db query', { text, duration, rows: res.rowCount });
         }
         else if(res){
-          console.log('Executed db query', { text, duration, rows: undefined });
+          //console.log('Executed db query', { text, duration, rows: undefined });
         }
         return res
       } catch (err) {
