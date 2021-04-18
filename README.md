@@ -1,10 +1,10 @@
-# Scraper
+# Scraper 
 
 ### DENTISTS 
-1. ADA - gives list of locations 
+1. ADA - gives list of locations [scraped DE, IL, partial PA]
     1. set target['state'] variable; TODO - scrape all states 
     2. `$ node app/dentists_ada.js` from node_scraper root folder 
-2. YELP
+2. YELP 
 3. YELLOW PAGES 
 4. GOOGLE MAPS [LATER]
 5. SECRETARY OF STATE [LATER]
@@ -13,7 +13,7 @@
 # Insurance Providers
 * Kaiser Permanente
 * Blue Cross Blue Shield
-* UnitedHealthCare
+* UnitedHealthCare -  https://dentalsearch.yourdentalplan.com/providersearch
 * Aetna
 * Cigna
 * HCSC

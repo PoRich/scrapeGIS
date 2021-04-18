@@ -31,6 +31,17 @@ module.exports = {
                 } catch (e) {
                     throw e
                 }   
+            } else if (site == 'bcbs'){
+                let queryText = 'select regexp_split_to_array((select concat_ws(\',\', city, state_abbrev) \
+                                from dental_data.meta\
+                                where (bcbs_status <> bcbs_max_pages or bcbs_max_pages is null) and \
+                                state_abbrev=$1 limit 1), \',\') as target;'
+                try{    
+                    let res = await db.query(queryText, [state]);
+                    return res['rows'][0]['target']
+                } catch (e) {
+                    throw e
+                }   
             }
         
     },
