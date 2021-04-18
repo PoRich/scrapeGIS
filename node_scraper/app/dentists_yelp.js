@@ -54,7 +54,6 @@ async function initial_scrape() {
     await preparePageForTests(page);
     
     // pull city to scrape from db
-
     var _target = await getTargetCity(targetState); 
     console.log(`_target ${_target}`)
 
@@ -72,7 +71,7 @@ async function initial_scrape() {
 
         if (bizData){   
             for(let i=0; i<bizData.length; i=i+1){
-                console.log(`profile ${bizData[i]['profile']}`)
+                console.log(`profile_url ${bizData[i]['profile_url']}`)
                 await saveBiz(bizData[i], target, url)
                 console.log(`Saved ${bizData[i]['name']} to db`)
             }
@@ -113,11 +112,11 @@ async function detail_scrape() {
     let browser = await puppeteerExtra.launch({headless: true});
     let page = await browser.newPage();
     // pull initial targets from db
-    var _targetList = await getProfileLinks();  // list of objects with keys d_id, and y_profile
+    var _targetList = await getProfileLinks();  // list of objects with keys d_id, and profile_url
     var targetObj
     while(_targetList.length > 0){
         targetObj = _targetList.pop();
-        var addrPayload = await scrapeAddress(targetObj['y_profile'], page);
+        var addrPayload = await scrapeAddress(targetObj['profile_url'], page);
         if (addrPayload !== -1){
             await saveFullAddr(targetObj['d_id'], addrPayload);
             console.log(`saved ${addrPayload[0]} ${addrPayload[1]} --> d_id: ${targetObj['d_id']}`)
@@ -140,7 +139,7 @@ async function detail_scrape() {
 select biz_name, 
 --addr, 
 --phone, specialty, 
--- y_stars, y_reviews,
+-- rating, y_reviews,
 src, last_update from dental_data.yelp 
 where addr is null and biz_name is not null order by biz_name, src;
 
@@ -249,7 +248,7 @@ async function scrape(pageURL, page){
 
             return {
                 name: e.name[0].innerText, 
-                profile: e.name[0].href,
+                profile_url: e.name[0].href,
                 specialty: e.specialty.length == 1 ? e.specialty[0].innerText : null,
                 rating: e.rating.length == 1 ? Number(rating_regex.exec(e.rating[0].innerHTML)[1]) : null,
                 numRatings: e.numRatings.length == 1 ? Number(e.numRatings[0].innerText) : null,
@@ -322,14 +321,14 @@ async function saveBiz(payload, _target, url){
     try{
         await db.query('BEGIN');
         const queryText = 'INSERT INTO dental_data.yelp(biz_name, specialty, phone, addr, \
-                            y_stars, y_reviews, city, district, state_abbrev, src, y_profile) \
+                            rating, y_reviews, city, district, state_abbrev, src, profile_url) \
                             VALUES($1, $2, $3, $4, $5, $6, initcap($7), initcap($8), upper($9), $10, $11) \
                             ON CONFLICT ON CONSTRAINT yelp_biz_name_addr_key \
-                            DO UPDATE SET (y_stars, y_reviews, y_profile, last_update) = (EXCLUDED.y_stars, EXCLUDED.y_reviews, EXCLUDED.y_profile, now()) RETURNING d_id';
+                            DO UPDATE SET (rating, y_reviews, profile_url, last_update) = (EXCLUDED.rating, EXCLUDED.y_reviews, EXCLUDED.profile_url, now()) RETURNING d_id';
         await db.query(queryText, [payload['name'], payload['specialty'], payload['phone'], 
                                   payload['addr'], payload['rating'], payload['numRatings'],
                                   _target['city'], _target['district'], 
-                                  _target['state'], url, payload['profile']]);
+                                  _target['state'], url, payload['profile_url']]);
         await db.query('COMMIT');
     } catch (e) {
         await db.query('ROLLBACK');
@@ -375,7 +374,7 @@ async function getTargetCity(state){
 
 async function getProfileLinks(){
     try{
-        const queryText = 'select d_id, y_profile from dental_data.yelp where addr is null order by d_id';
+        const queryText = 'select d_id, profile_url from dental_data.yelp where addr is null order by d_id';
         var res = await db.query(queryText);
         //console.log(res['rows'])
         return res['rows']
