@@ -3,7 +3,8 @@ const StealthPlugin = require('puppeteer-extra-plugin-stealth')
 const RecaptchaPlugin = require('puppeteer-extra-plugin-recaptcha')
 const AdblockerPlugin = require('puppeteer-extra-plugin-adblocker')  // Add adblocker plugin to block all ads and trackers (saves bandwidth)
 require('dotenv').config();
-const db = require('../db')
+const db = require('../db');
+const ScrapeTools = require('../modules/scrapeTools.js');
 //puppeteerExtra.use(require('puppeteer-extra-plugin-repl')())
 puppeteerExtra.use(StealthPlugin());
 puppeteerExtra.use(AdblockerPlugin({ blockTrackers: true }));
@@ -117,12 +118,8 @@ async function detail_scrape() {
     while(_targetList.length > 0){
         targetObj = _targetList.pop();
         var addrPayload = await scrapeAddress(targetObj['profile_url'], page);
-        if (addrPayload !== -1){
-            await saveFullAddr(targetObj['d_id'], addrPayload);
-            console.log(`saved ${addrPayload[0]} ${addrPayload[1]} --> d_id: ${targetObj['d_id']}`)
-        } else {
-            continue;
-        }
+        await saveFullAddr(targetObj['d_id'], addrPayload);
+        console.log(`saved ${addrPayload[0]} ${addrPayload[1]} --> d_id: ${targetObj['d_id']}`)
     }
 
     await browser.close();
@@ -189,19 +186,6 @@ select distinct city, state from dental_data.yelp where addr is null and biz_nam
 
 // ============================== HELPER FUNCTIONS ============================== 
 
-// Generates proxy api url 
-function proxy_url(targetURL){
-    // check scraperapi proxy account
-    // curl "http://api.scraperapi.com/account?api_key=5fa9ed494209abb506dd2ccf7a61d4e2"
-    return `http://api.scraperapi.com/?api_key=${process.env.SCRAPERAPI}&url=${targetURL}&country_code=us`;
-}
-
-// Random num generator (for throttling)
-function rand_num(min, max) {  
-    return Math.floor(
-      Math.random() * (max - min) + min
-    )
-}
 
 async function scrape(pageURL, page){
     try { // try to go to URL
@@ -216,7 +200,7 @@ async function scrape(pageURL, page){
         x: 0,
         y: 0,
         xDistance: 0,
-        yDistance: - rand_num(0,100),
+        yDistance: - ScrapeTools.rand_num(0,100),
         })
 
     try{
@@ -270,11 +254,12 @@ async function scrape(pageURL, page){
 }
 
 
-/**
+/** Scrapes business profile page for address if address wasn't in general search results
+ * Uses recaptcha rather than proxy because recaptchas are not served frequently 
  * 
  * @param {String} pageURL link to yelp business page  
  * @param {object} page puppeteer page object 
- * @returns 
+ * @returns Array 
  */
 async function scrapeAddress(pageURL, page){
     try { // try to go to URL
@@ -289,15 +274,30 @@ async function scrapeAddress(pageURL, page){
         x: 0,
         y: 0,
         xDistance: 0,
-        yDistance: - rand_num(0,100),
+        yDistance: - ScrapeTools.rand_num(0,100),
         })
 
     try{
-        await page.waitForSelector('p[class=" css-m6anxm"] > span', {timeout: 48000});
+        await page.waitForSelector('p[class=" css-m6anxm"] > span', {timeout: 30000});
     } catch (e) {
         // Either 1) no results or 2) blocked by recaptcha 
-        console.log(`No results on page: ${e}`)
-        return -1;
+        console.log(`No results on page or RECAPTCHA: ${e}`)
+        // ==================== RECAPTCHA CODE BLOCK [START] ====================
+        try {
+            await page.solveRecaptchas();  // puppeteer 2captcha plugin
+
+            await Promise.all([
+                page.waitForNavigation(),
+                page.click(' [type="submit"]')
+            ]);
+            console.log('recaptcha found & solved');
+        }
+        catch (e) {
+            console.log('no recaptcha found');
+            // signifies that an attempt was made 
+            return ['-1', '-1', '-1', '-1'];
+        }
+        // ==================== RECAPTCHA CODE BLOCK [END] ====================
     }
 
     const payload = await page.evaluate(() => {
