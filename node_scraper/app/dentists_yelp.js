@@ -139,7 +139,7 @@ async function detail_scrape() {
 select biz_name, 
 --addr, 
 --phone, specialty, 
--- rating, y_reviews,
+-- rating, num_reviews,
 src, last_update from dental_data.yelp 
 where addr is null and biz_name is not null order by biz_name, src;
 
@@ -270,6 +270,12 @@ async function scrape(pageURL, page){
 }
 
 
+/**
+ * 
+ * @param {String} pageURL link to yelp business page  
+ * @param {object} page puppeteer page object 
+ * @returns 
+ */
 async function scrapeAddress(pageURL, page){
     try { // try to go to URL
         await page.goto(pageURL, { waitUntil: 'load', timeout: 36000} );
@@ -289,6 +295,7 @@ async function scrapeAddress(pageURL, page){
     try{
         await page.waitForSelector('p[class=" css-m6anxm"] > span', {timeout: 48000});
     } catch (e) {
+        // Either 1) no results or 2) blocked by recaptcha 
         console.log(`No results on page: ${e}`)
         return -1;
     }
@@ -321,10 +328,10 @@ async function saveBiz(payload, _target, url){
     try{
         await db.query('BEGIN');
         const queryText = 'INSERT INTO dental_data.yelp(biz_name, specialty, phone, addr, \
-                            rating, y_reviews, city, district, state_abbrev, src, profile_url) \
+                            rating, num_reviews, city, district, state_abbrev, src, profile_url) \
                             VALUES($1, $2, $3, $4, $5, $6, initcap($7), initcap($8), upper($9), $10, $11) \
                             ON CONFLICT ON CONSTRAINT yelp_biz_name_addr_key \
-                            DO UPDATE SET (rating, y_reviews, profile_url, last_update) = (EXCLUDED.rating, EXCLUDED.y_reviews, EXCLUDED.profile_url, now()) RETURNING d_id';
+                            DO UPDATE SET (rating, num_reviews, profile_url, last_update) = (EXCLUDED.rating, EXCLUDED.num_reviews, EXCLUDED.profile_url, now()) RETURNING d_id';
         await db.query(queryText, [payload['name'], payload['specialty'], payload['phone'], 
                                   payload['addr'], payload['rating'], payload['numRatings'],
                                   _target['city'], _target['district'], 
