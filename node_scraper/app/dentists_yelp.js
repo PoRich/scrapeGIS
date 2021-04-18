@@ -204,12 +204,12 @@ async function scrapeSearch(pageURL, page){
         })
 
     try{
-        await page.waitForSelector('a[class="css-166la90"]', {timeout: 48000});
+        await page.waitForSelector('a[class="css-166la90"]', {timeout: 10000});
     } catch (e) {
         console.log(`No results on page or Recaptcha : ${e}`)
         // ==================== RECAPTCHA CODE BLOCK [START] ====================
         try{
-            await page.waitForSelector('.g-recaptcha"]', {timeout: 15000});
+            await page.waitForSelector('.g-recaptcha', {timeout: 5000});
             await page.solveRecaptchas();  // puppeteer 2captcha plugin
             await Promise.all([
                 page.waitForNavigation(),
