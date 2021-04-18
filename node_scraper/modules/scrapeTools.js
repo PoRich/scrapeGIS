@@ -63,10 +63,11 @@ module.exports = {
         let queryText = "";
         if (site == 'yelp') {
             queryText = 'update dental_data.meta set (yelp_status, yelp_max_pages) = ($1, $2) \
-                               where state_abbrev=upper($3) and city=initcap($4)';
+                               where state_abbrev=upper($3) and city=$4';
         } else if (site == 'yp'){
+            // do not convert city capitalization it will not match McConnellsburg 
             queryText = 'update dental_data.meta set (yp_status, yp_max_pages) = ($1, $2) \
-                               where state_abbrev=upper($3) and city=initcap($4)';
+                               where state_abbrev=upper($3) and city=$4'; 
         }
         try{
             await db.query('BEGIN');
