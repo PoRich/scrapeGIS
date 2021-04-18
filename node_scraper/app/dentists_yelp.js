@@ -34,7 +34,7 @@ await page.setViewport({  // set screen resolution
 
 // =================== STEP 1: INITIAL SCRAPE ===================
 
-const targetState = 'PA';
+const targetState = 'IL';
 var target = {};
 
 (async () => {
@@ -69,31 +69,37 @@ async function initial_scrape() {
 
         var p = await scrape(url, page) // scrape general search results 
         var bizData = p[1];
-        var totalPages = p[0];
 
-        for(let i=0; i<bizData.length; i=i+1){
-            console.log(`profile ${bizData[i]['profile']}`)
-            await saveBiz(bizData[i], target, url)
-            console.log(`Saved ${bizData[i]['name']} to db`)
+        if (bizData){   
+            for(let i=0; i<bizData.length; i=i+1){
+                console.log(`profile ${bizData[i]['profile']}`)
+                await saveBiz(bizData[i], target, url)
+                console.log(`Saved ${bizData[i]['name']} to db`)
+            }
+            var totalPages = p[0];
+        }
+        else {
+            var totalPages = -1;
         }
         await updateMetaStatus(1, totalPages, target);
 
-        for(let j=2; j<=totalPages; j=j+1){
-            url = `https://www.yelp.com/search?find_desc=Dentists&find_loc=${target['city']}%2C+${target['state']}&start=${(j-1)*10}`
-            p = await scrape(url, page)
-            if (p == -1){ // no results detected
-                continue 
-            } 
-            else if (p.length == 2) { // first item is the page number
-                bizData = p[1];    
-                for(let k=0; k<bizData.length; k=k+1){
-                    await saveBiz(bizData[k], target, url)
-                    console.log(`Saved ${bizData[k]['name']} to db`)
+        if (totalPages > 1){
+            for(let j=2; j<=totalPages; j=j+1){
+                url = `https://www.yelp.com/search?find_desc=Dentists&find_loc=${target['city']}%2C+${target['state']}&start=${(j-1)*10}`
+                p = await scrape(url, page)
+                if (p == -1){ // no results detected
+                    continue 
+                } 
+                else if (p.length == 2) { // first item is the page number
+                    bizData = p[1];    
+                    for(let k=0; k<bizData.length; k=k+1){
+                        await saveBiz(bizData[k], target, url)
+                        console.log(`Saved ${bizData[k]['name']} to db`)
+                    }
+                    await updateMetaStatus(j, totalPages, target);
                 }
-                await updateMetaStatus(j, totalPages, target);
             }
-
-    }
+        }
     // get next target 
     _target = await getTargetCity(targetState); 
     }
@@ -112,8 +118,12 @@ async function detail_scrape() {
     while(_targetList.length > 0){
         targetObj = _targetList.pop();
         var addrPayload = await scrapeAddress(targetObj['y_profile'], page);
-        await saveFullAddr(targetObj['d_id'], addrPayload);
-        console.log(`saved ${addrPayload[0]} ${addrPayload[1]} --> d_id: ${targetObj['d_id']}`)
+        if (addrPayload !== -1){
+            await saveFullAddr(targetObj['d_id'], addrPayload);
+            console.log(`saved ${addrPayload[0]} ${addrPayload[1]} --> d_id: ${targetObj['d_id']}`)
+        } else {
+            continue;
+        }
     }
 
     await browser.close();
