@@ -39,7 +39,7 @@ await page.setViewport({  // set screen resolution
 
 var target = {};
 (async () => {
-    initial_scrape('IL');
+    initial_scrape('FL');
 })();
 
 

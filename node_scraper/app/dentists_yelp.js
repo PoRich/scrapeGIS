@@ -35,7 +35,7 @@ await page.setViewport({  // set screen resolution
 
 // =================== STEP 1: INITIAL SCRAPE ===================
 
-const targetState = 'IL';
+const targetState = 'PA';
 var target = {};
 
 (async () => {
@@ -55,7 +55,7 @@ async function initial_scrape() {
     await preparePageForTests(page);
     
     // pull city to scrape from db
-    var _target = await getTargetCity(targetState); 
+    var _target = await ScrapeTools.getTargetCity(targetState, 'yelp'); 
     console.log(`_target ${_target}`)
 
     while (_target){
@@ -81,7 +81,7 @@ async function initial_scrape() {
         else {
             var totalPages = -1;
         }
-        await updateMetaStatus(1, totalPages, target);
+        await ScrapeTools.updateMetaStatus(1, totalPages, target, 'yelp');
 
         if (totalPages > 1){
             for(let j=2; j<=totalPages; j=j+1){
@@ -96,12 +96,12 @@ async function initial_scrape() {
                         await saveBiz(bizData[k], target, url)
                         console.log(`Saved ${bizData[k]['name']} to db`)
                     }
-                    await updateMetaStatus(j, totalPages, target);
+                    await ScrapeTools.updateMetaStatus(j, totalPages, target, 'yelp');
                 }
             }
         }
     // get next target 
-    _target = await getTargetCity(targetState); 
+    _target = await ScrapeTools.getTargetCity(targetState); 
     }
 
     await browser.close();
@@ -358,38 +358,6 @@ async function saveBiz(payload, _target, url){
     }
 }
 
-async function updateMetaStatus(_currentPage, _totalPages, _target){
-    try{
-        await db.query('BEGIN');
-        const queryText = 'update dental_data.meta set (yelp_status, yelp_max_pages) = ($1, $2) \
-                           where state_abbrev=upper($3) and city=initcap($4)';
-        await db.query(queryText, [_currentPage, _totalPages, 
-                                   _target['state'], _target['city'] ]);
-        await db.query('COMMIT');
-    } catch (e) {
-        await db.query('ROLLBACK');
-        throw e
-    }
-}
-
-
-/**
- * 
- * @returns array of cities (from ADA scrape) that have not been Yelp scraped
- * TODO - cross reference against tiger.place table
- */
-async function getTargetCity(state){
-    try{
-        const queryText = 'select regexp_split_to_array((select concat_ws(\',\', city, state_abbrev) \
-                    from dental_data.meta\
-                    where (yelp_status <> yelp_max_pages or yelp_max_pages is null) and \
-                        state_abbrev=$1 limit 1), \',\') as target;'
-        var res = await db.query(queryText, [state]);
-        return res['rows'][0]['target']
-    } catch (e) {
-        throw e
-    }   
-}
 
 
 
@@ -410,7 +378,7 @@ async function saveFullAddr(_d_id, _addrPayload){
     try{
         await db.query('BEGIN');
         const queryText = 'update dental_data.yelp set addr = $1, district = $2, \
-                           phone=$3, website=$4, where d_id=$5';
+                           phone=$3, website=$4 where d_id=$5';
         await db.query(queryText, [_addrPayload[0], _addrPayload[1], _addrPayload[2], _addrPayload[3], _d_id]);
         await db.query('COMMIT');
     } catch (e) {
