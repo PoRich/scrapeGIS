@@ -3,12 +3,23 @@ const db = require('../db')
 module.exports = {
     /**gets states that have not yet been scraped */
     async getTargetState(site){
-        if (site='yp'){
-            let queryText = 'select distinct state_abbrev from dental_data.meta \
-                            where yp_status is null'
+        if (site==='yp'){
+            let queryText = 'select array(select distinct state_abbrev \
+                             from dental_data.meta where yp_status is null) \
+                             as target;'
             try{
                 let res = await db.query(queryText);
-                return res['rows'][0]['target']
+                return res['rows'][0]['target'];
+            } catch(e){
+                throw e;
+            }
+        } else if (site==='yelp'){
+            let queryText = 'select array(select distinct state_abbrev \
+                             from dental_data.meta where yelp_status is null) \
+                             as target;'
+            try{
+                let res = await db.query(queryText);
+                return res['rows'][0]['target'];
             } catch(e){
                 throw e;
             }
