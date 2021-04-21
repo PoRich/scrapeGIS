@@ -34,20 +34,21 @@ await page.setViewport({  // set screen resolution
 
 
 // =================== STEP 1: INITIAL SCRAPE ===================
-
-const targetState = 'FL';
 var target = {};
+// pull list of states to scrape 
+var states_hitlist = ScrapeTools.getTargetState('yelp');
 
 (async () => {
-    // TODO - need to run these manually one after the other 
-    initial_scrape();
+    while (states_hitlist.length >0) {
+        initial_scrape(states_hitlist.pop());
+    }
 })();
 
 /**
  * takes tiger list of cities and saves help search results 
  *  @result null;
  */
-async function initial_scrape() {
+async function initial_scrape(targetState) {
     // prep chronium 
     let browser = await puppeteerExtra.launch({headless: true});
     let page = await browser.newPage();
