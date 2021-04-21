@@ -37,12 +37,13 @@ await page.setViewport({  // set screen resolution
 
 // =================== STEP 1: INITIAL SCRAPE ===================
 var target = {};
-// pull list of states to scrape 
-var states_hitlist = ScrapeTools.getTargetState('yp');
 
 (async () => {
+    // pull list of states to scrape 
+    var states_hitlist = await ScrapeTools.getTargetState('yp');
+    //console.log(`state list ${states_hitlist}`);
     while (states_hitlist.length >0) {
-        initial_scrape(states_hitlist.pop());
+        await initial_scrape(states_hitlist.pop());
     }
 })();
 
@@ -51,7 +52,7 @@ var states_hitlist = ScrapeTools.getTargetState('yp');
  * takes tiger list of cities and saves help search results 
  *  @result null;
  */
- async function initial_scrape(targetState) {s
+ async function initial_scrape(targetState) {
     // prep chronium 
     let browser = await puppeteerExtra.launch({headless: true});
     let page = await browser.newPage();
