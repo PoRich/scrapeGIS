@@ -35,13 +35,12 @@ await page.setViewport({  // set screen resolution
 
 // =================== STEP 1: INITIAL SCRAPE ===================
 
-const targetState = 'PA';
+const targetState = 'FL';
 var target = {};
 
 (async () => {
     // TODO - need to run these manually one after the other 
-    initial_scrape()
-        .then(detail_scrape);
+    initial_scrape();
 })();
 
 /**
@@ -67,12 +66,13 @@ async function initial_scrape() {
         console.log(`========= SCRAPING YELP city: ${target['city']}, state ${target['state']} ==============`);
         var url = `https://www.yelp.com/search?find_desc=Dentists&find_loc=${target['city']}%2C+${target['state']}`
 
-        var p = await scrapeSearch(url, page) // scrape general search results 
+        // scrape page 1 of general search results 
+        var p = await scrapeSearch(url, page) 
         var bizData = p[1];
 
         if (bizData){   
             for(let i=0; i<bizData.length; i=i+1){
-                console.log(`profile_url ${bizData[i]['profile_url']}`)
+                //console.log(`profile_url ${bizData[i]['profile_url']}`)
                 await saveBiz(bizData[i], target, url)
                 console.log(`Saved ${bizData[i]['name']} to db`)
             }
@@ -82,7 +82,8 @@ async function initial_scrape() {
             var totalPages = -1;
         }
         await ScrapeTools.updateMetaStatus(1, totalPages, target, 'yelp');
-
+        
+        // scrape page >1 of general search results 
         if (totalPages > 1){
             for(let j=2; j<=totalPages; j=j+1){
                 url = `https://www.yelp.com/search?find_desc=Dentists&find_loc=${target['city']}%2C+${target['state']}&start=${(j-1)*10}`
@@ -100,8 +101,11 @@ async function initial_scrape() {
                 }
             }
         }
+        var d = await detail_scrape(target, page);
+
     // get next target 
-    _target = await ScrapeTools.getTargetCity(targetState); 
+    _target = await ScrapeTools.getTargetCity(targetState, 'yelp'); 
+    console.log(`next target city ${_target}`);
     }
 
     await browser.close();
@@ -109,11 +113,11 @@ async function initial_scrape() {
 
 // =================== STEP 2: GET FULL ADDRESSES of Company's Profile page ===================
 
-async function detail_scrape() {
-    let browser = await puppeteerExtra.launch({headless: true});
-    let page = await browser.newPage();
+async function detail_scrape(target, page) {
+    //let browser = await puppeteerExtra.launch({headless: true});
+    //let page = await browser.newPage();
     // pull initial targets from db
-    var _targetList = await getProfileLinks();  // list of objects with keys d_id, and profile_url
+    var _targetList = await getProfileLinks(target);  // list of objects with keys d_id, and profile_url
     var targetObj
     while(_targetList.length > 0){
         targetObj = _targetList.pop();
@@ -122,7 +126,7 @@ async function detail_scrape() {
         console.log(`saved ${addrPayload[0]} ${addrPayload[1]} --> d_id: ${targetObj['d_id']}`)
     }
 
-    await browser.close();
+    //await browser.close();
 }
 
 
@@ -343,10 +347,9 @@ async function saveBiz(payload, _target, url){
     try{
         await db.query('BEGIN');
         const queryText = 'INSERT INTO dental_data.yelp(biz_name, specialty, phone, addr, \
-                            rating, num_reviews, city, district, state_abbrev, src, profile_url) \
+                            rating, num_reviews, target_city, district, state_abbrev, src, profile_url) \
                             VALUES($1, $2, $3, $4, $5, $6, initcap($7), initcap($8), upper($9), $10, $11) \
-                            ON CONFLICT ON CONSTRAINT yelp_biz_name_addr_key \
-                            DO UPDATE SET (rating, num_reviews, profile_url, last_update) = (EXCLUDED.rating, EXCLUDED.num_reviews, EXCLUDED.profile_url, now()) RETURNING d_id';
+                            ON CONFLICT DO NOTHING RETURNING d_id';
         await db.query(queryText, [payload['name'], payload['specialty'], payload['phone'], 
                                   payload['addr'], payload['rating'], payload['numRatings'],
                                   _target['city'], _target['district'], 
@@ -362,10 +365,10 @@ async function saveBiz(payload, _target, url){
 
 
 
-async function getProfileLinks(){
+async function getProfileLinks(target){
     try{
-        const queryText = 'select d_id, profile_url from dental_data.yelp where addr is null order by d_id';
-        var res = await db.query(queryText);
+        const queryText = 'select d_id, profile_url from dental_data.yelp where addr is null and state_abbrev=$1 and target_city=$2 order by d_id';
+        var res = await db.query(queryText, [target['state'], target['target_city']]);
         //console.log(res['rows'])
         return res['rows']
     } catch (e) {
@@ -382,6 +385,7 @@ async function saveFullAddr(_d_id, _addrPayload){
         await db.query(queryText, [_addrPayload[0], _addrPayload[1], _addrPayload[2], _addrPayload[3], _d_id]);
         await db.query('COMMIT');
     } catch (e) {
+        console.log('failed to save full address')
         await db.query('ROLLBACK');
         throw e
     }

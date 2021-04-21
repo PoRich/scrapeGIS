@@ -1,6 +1,19 @@
 const db = require('../db')
 
 module.exports = {
+    /**gets states that have not yet been scraped */
+    async getTargetState(site){
+        if (site='yp'){
+            let queryText = 'select distinct state_abbrev from dental_data.meta \
+                            where yp_status is null'
+            try{
+                let res = await db.query(queryText);
+                return res['rows'][0]['target']
+            } catch(e){
+                throw e;
+            }
+        }
+    },
     /**
      * @state state abbreviation to filter for cities
      * @site either yp or yelp
@@ -10,10 +23,10 @@ module.exports = {
     async getTargetCity(state, site){
         
             if (site == 'yelp') {
-                let queryText = 'select regexp_split_to_array((select concat_ws(\',\', city, state_abbrev) \
+                let queryText = 'select regexp_split_to_array((select concat_ws(\';\', city, state_abbrev) \
                                 from dental_data.meta\
                                 where (yelp_status <> yelp_max_pages or yelp_max_pages is null) and \
-                                state_abbrev=$1 limit 1), \',\') as target;'
+                                state_abbrev=$1 limit 1), \';\') as target;'
                 try{    
                     let res = await db.query(queryText, [state]);
                     console.log(`###### Retrieved target city ${res['rows'][0]['target']} for yelp scraper ######`)
@@ -22,10 +35,10 @@ module.exports = {
                     throw e
                 }   
             } else if (site == 'yp') {
-                let queryText = 'select regexp_split_to_array((select concat_ws(\',\', city, state_abbrev) \
+                let queryText = 'select regexp_split_to_array((select concat_ws(\';\', city, state_abbrev) \
                                 from dental_data.meta\
                                 where yp_max_pages is null and \
-                                state_abbrev=$1 limit 1), \',\') as target;'
+                                state_abbrev=$1 limit 1), \';\') as target;'
                 try{    
                     let res = await db.query(queryText, [state]);
                     console.log(`###### Retrieved target city ${res['rows'][0]['target']} for ypages scraper ######`)
@@ -34,10 +47,10 @@ module.exports = {
                     throw e
                 }   
             } else if (site == 'bcbs'){
-                let queryText = 'select regexp_split_to_array((select concat_ws(\',\', city, state_abbrev) \
+                let queryText = 'select regexp_split_to_array((select concat_ws(\';\', city, state_abbrev) \
                                 from dental_data.meta\
                                 where (bcbs_status <> bcbs_max_pages or bcbs_max_pages is null) and \
-                                state_abbrev=$1 limit 1), \',\') as target;'
+                                state_abbrev=$1 limit 1), \';\') as target;'
                 try{    
                     let res = await db.query(queryText, [state]);
                     return res['rows'][0]['target']
