@@ -6,7 +6,6 @@ const http = require('http');
 const https = require('https');
 const path = require('path');
 const puppeteer = require('puppeteer');
-const puppeteerFirefox = require('puppeteer-firefox');
 const unzip = require('unzip');
 
 
@@ -201,6 +200,10 @@ module.exports = {
             let stagingFolder = parsedPath.dir
             console.log('Loading shapefile...');
             process.chdir(stagingFolder);   // need to be in stagingFolder to execute command 
+            
+            // if ERROR: Geometry type (MultiPolygon) does not match column type (Polygon)
+            // let fmt_cmd = format('ogr2ogr -f "PostgreSQL" PG:"host=%1$s port=%2$s user=%3$s dbname=%4$s" %5$I -s_srs EPSG:4326 -t_srs EPSG:4326 -nln %6$s.%7$s -overwrite -lco GEOMETRY_NAME=the_geom -nlt MULTIPOLYGON;',
+            
             let fmt_cmd = format('ogr2ogr -f "PostgreSQL" PG:"host=%1$s port=%2$s user=%3$s dbname=%4$s" %5$I -s_srs EPSG:4326 -t_srs EPSG:4326 -nln %6$s.%7$s -overwrite -lco GEOMETRY_NAME=the_geom;',
                 `${process.env.PGHOST}`, `${process.env.PGPORT}`, `${process.env.PGUSER}`, `${process.env.PGDATABASE}`, `${parsedPath.base}`, `${process.env.PGSCHEMA}`, `${tableName}`)
             //let fmt_cmd = "ogr2ogr -f "PostgreSQL" PG:"host=localhost port=5432 user=parcel_data dbname=parcels" "unsafe.shp" -s_srs EPSG:4326 -t_srs EPSG:4326 -nln parcel_data.c42101_unsafe_violations -overwrite -lco GEOMETRY_NAME=the_geom;"
