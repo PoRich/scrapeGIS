@@ -7,7 +7,7 @@ import os
 import re 
 import requests
 import shutil
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 import subprocess
 import sys
 import traceback
@@ -21,7 +21,7 @@ staging_dir=os.path.join(app_dir, 'tmp')
 error_log = os.path.join(app_dir, 'python_scraper', 'logs', 'error_log.txt')
 DATABASE_URL = os.environ.get('DATABASE_URL')
 
-SCHEMA = 'parcel_data'  # schema for staging raw parcel data 
+SCHEMA = 'pcl_data'  # schema for staging raw parcel data 
 
 #TODO 1) unzip functionality for json or csv file 
 #TODO 2) functionality for shp file 
@@ -36,6 +36,7 @@ class Table:
         self.url = url
         self.unzip = unzip  # TODO 
         self.if_exists = if_exists
+        
 
     def download_file(self):
         with requests.get(self.url, stream=True) as r:
@@ -103,13 +104,18 @@ class Table:
         engine = create_engine(DATABASE_URL)
         self.df['last_updated_utc'] = datetime.datetime.utcnow()  # add time stamp UTC
         self.df.to_sql(self.table_name, con=engine, schema=SCHEMA, if_exists=self.if_exists)  # dump into database
+        # update metadata 
+        with engine.connect() as con:
+            s = text("update tools.meta set (last_updated, next_update)=(now(), now()::date + internal_update_freq) where _schema=:schema and _table=:table")
+            con.execute(s, schema=SCHEMA, table=self.table_name)
         return
 
 
-# TODO - shp case 
+''' TODO - shp
 def scrape_shp(url_dict):
     for table, shp_url in url_dict.items():
         cmd = f"bash download_shp.sh {COUNTY_CODE}_{table} {shp_url}"
         logging.debug(f'executing cmd {cmd} bash directory:{bash_scraper_dir}')
         subprocess.Popen(cmd.split(), cwd=bash_scraper_dir)
-    return 0
+    return 0'''
+

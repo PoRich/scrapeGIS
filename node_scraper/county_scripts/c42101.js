@@ -1,6 +1,6 @@
 if (process.env.NODE_ENV !== 'production') {
     require('dotenv').config();}
-const Shp2psql= require('../routes/shp2psql.js');
+const Shp2psql= require('../app/shp2psql.js');
 
 // catch uncaught exceptions
 process.on('uncaughtException', err =>{
@@ -27,6 +27,7 @@ const shp_urls =  {
     "li_violations": "https://phl.carto.com/api/v2/sql?filename=violations&format=shp&skipfields=cartodb_id&q=SELECT%20*%20FROM%20violations%20WHERE%20violationdate%20%3E=%20%272019-01-01%27",
     "unsafe_violations": "https://phl.carto.com/api/v2/sql?q=SELECT+*+FROM+unsafe&filename=unsafe&format=shp&skipfields=cartodb_id", 
     "dangerous_violations": "https://phl.carto.com/api/v2/sql?q=SELECT+*+FROM+imm_dang&filename=imm_dang&format=shp&skipfields=cartodb_id",
+    "water_dept": "https://opendata.arcgis.com/datasets/84baed491de44f539889f2af178ad85c_0.zip"
     }
 
 let archive_shp_urls = {
@@ -95,6 +96,8 @@ const addCompleted = function (record) {
         console.log(completed);
     }
 }
+
+/**
 for(var k in archive_shp_urls) {
     console.log(`Scraping ${k} for archives... `)
     
@@ -103,7 +106,7 @@ for(var k in archive_shp_urls) {
     }
 
 
-/**
+
 (async function() {
     // get all archived data  
     let completed = []; 
@@ -129,3 +132,5 @@ for(var k in archive_shp_urls) {
 })();
 */
 
+// download water dept shp file 
+scrape_shp('c42101', 'water_dept', shp_urls['water_dept']);
