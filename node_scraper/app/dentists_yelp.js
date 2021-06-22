@@ -35,12 +35,12 @@ await page.setViewport({  // set screen resolution
 
 // =================== STEP 1: INITIAL SCRAPE ===================
 var target = {};
-// pull list of states to scrape 
-var states_hitlist = ScrapeTools.getTargetState('yelp');
 
 (async () => {
+    // pull list of states to scrape 
+    var states_hitlist = await ScrapeTools.getTargetState('yelp');
     while (states_hitlist.length >0) {
-        initial_scrape(states_hitlist.pop());
+        await initial_scrape(states_hitlist.pop());
     }
 })();
 
