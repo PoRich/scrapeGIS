@@ -32,17 +32,24 @@ await page.setViewport({  // set screen resolution
 }
 
 
+const recaptchaCss = '.g-recaptcha'; 
+const recaptchaSubmitCss = '.ybtn.ybtn--primary';
+
+
 
 // =================== STEP 1: INITIAL SCRAPE ===================
 var target = {};
 
 (async () => {
+    /*
     // pull list of states to scrape 
     var states_hitlist = await ScrapeTools.getTargetState('yelp');
     //var states_hitlist = ['TX'];
     while (states_hitlist.length >0) {
         await initial_scrape(states_hitlist.pop());
     }
+    */
+    geocodePostFacto();
 })();
 
 /**
@@ -307,10 +314,21 @@ async function scrapeAddress(pageURL, page){
     const payload = await page.evaluate(() => {
         var fullAddr = document.querySelector('p[class=" css-1h1j0y3"] > p[class=" css-e81eai"]') ? document.querySelector('p[class=" css-1h1j0y3"] > p[class=" css-e81eai"]').innerText : -1;
         var district = document.querySelector('p[class=" css-m6anxm"] > span') ? document.querySelector('p[class=" css-m6anxm"] > span').innerText : -1; 
-        
+
         var sideBox = document.querySelectorAll('div[class=" arrange-unit__373c0__1piwO arrange-unit-fill__373c0__17z0h border-color--default__373c0__2oFDT"] >p[class=" css-1h1j0y3"]') ? document.querySelectorAll('div[class=" arrange-unit__373c0__1piwO arrange-unit-fill__373c0__17z0h border-color--default__373c0__2oFDT"] >p[class=" css-1h1j0y3"]') : -1;
         var phone_regex = /\(\d\d\d\) \d\d\d/;
         var website_regex = /\.(org|net|com?)$/;
+        
+        // geocode 
+        var mapSrc = document.querySelectorAll('img[alt="Map"]')[0].getAttribute('srcset');
+        const lon_regex = /%2C(-?\d{1,2}\.\d{3,})&markers/; // '%2C' is hex encoding for comma
+        const lat_regex = /center=(-?\d{1,2}\.\d{3,})%2C/; // '%2C' is hex encoding for comma
+        let lngLat = null
+        if (lon_regex.exec(mapSrc)){
+            lngLat = [lon_regex.exec(mapSrc)[1], lat_regex.exec(mapSrc)[1]]
+        }
+        
+
         let phone = "";
         let website = "";
         for(let i=0; i<sideBox.length; i=i+1){
@@ -321,7 +339,7 @@ async function scrapeAddress(pageURL, page){
                 website = sideBox[i].innerText;
             }
         }
-        return [fullAddr, district, phone, website];
+        return [fullAddr, district, phone, website, lngLat];
     })
     return payload;
     }
@@ -366,8 +384,9 @@ async function saveFullAddr(_d_id, _addrPayload){
     try{
         await db.query('BEGIN');
         const queryText = 'update dental_data.yelp set addr = $1, district = $2, \
-                           phone=$3, website=$4 where d_id=$5';
-        await db.query(queryText, [_addrPayload[0], _addrPayload[1], _addrPayload[2], _addrPayload[3], _d_id]);
+                           phone=$3, website=$4, the_geom=(ST_SetSRID(ST_MakePoint($5::float, $6::float), 4269) where d_id=$7';
+        await db.query(queryText, [_addrPayload[0], _addrPayload[1], _addrPayload[2], 
+                _addrPayload[3], _addrPayload[4][0], _addrPayload[4][1], _d_id]);
         await db.query('COMMIT');
     } catch (e) {
         console.log('failed to save full address')
@@ -390,3 +409,55 @@ insert into biz.dentists_redo(url) select distinct src from dental_data.yelp whe
     }   
 }
 
+
+/**
+ * Revisits yelp business profile pages and scrapes geocode info
+ */
+async function geocodePostFacto(){
+    // get urls 
+    const urlsQuery = await db.query('select array_agg(profile_url) urls from dental_data.yelp where the_geom is null');
+    let urls = urlsQuery['rows'][0]['urls'];
+
+    // Start browser, open new page, prep use-agent 
+    let browser = await puppeteerExtra.launch({headless: true});
+    let page = await browser.newPage();
+    ScrapeTools.preparePageForTests(page);
+
+    while (urls.length > 0){
+        let url = urls.pop();
+        console.log(`************ scraping geom from ${url} ************`)
+        let payload = await scrapeGeom(url, page);
+        console.log(`payload -> ${JSON.stringify(payload)}`);
+        if (payload !== -1){
+            // save lnglat 
+            try{
+                await db.query('BEGIN');
+                const queryText = 'update dental_data.yelp set \
+                        the_geom=ST_SetSRID(ST_MakePoint($1::float, $2::float), 4269) where profile_url=$3';
+                await db.query(queryText, [payload[0], payload[1], url]);
+                await db.query('COMMIT');
+            } catch (e) {
+                console.log(`failed to save geom: ${e}`)
+                await db.query('ROLLBACK');
+                throw e
+            }
+        }
+    }
+    await browser.close();
+    return;
+}
+
+async function scrapeGeom(pageURL, page){
+    const _waitForCss = 'img[alt="Map"]';
+    await ScrapeTools.prepPage(pageURL, page, scrapeGeom, _waitForCss, recaptchaCss, recaptchaSubmitCss);
+    return page.evaluate(()=>{ 
+        var mapSrc = document.querySelectorAll('img[alt="Map"]')[0].getAttribute('srcset');
+        const lon_regex = /%2C(-?\d{1,3}\.\d{3,})&markers/; // '%2C' is hex encoding for comma
+        const lat_regex = /center=(-?\d{1,3}\.\d{3,})%2C/; // '%2C' is hex encoding for comma
+        let lngLat = null
+        if (lon_regex.exec(mapSrc)){
+            lngLat = [lon_regex.exec(mapSrc)[1], lat_regex.exec(mapSrc)[1]]
+        }
+        return lngLat ? lngLat : -1;
+    });
+};
