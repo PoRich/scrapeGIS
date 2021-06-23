@@ -40,7 +40,8 @@ var target = {};
 
 (async () => {
     // pull list of states to scrape 
-    var states_hitlist = await ScrapeTools.getTargetState('yp');
+     var states_hitlist = await ScrapeTools.getTargetState('yp');
+    // var states_hitlist = ['TX'];
     //console.log(`state list ${states_hitlist}`);
     while (states_hitlist.length >0) {
         await initial_scrape(states_hitlist.pop());
@@ -82,6 +83,7 @@ var target = {};
             var bizData = await scrapeYP(url, page) // scrape general search results 
             //console.log(`bizData: ${JSON.stringify(bizData)}`)
             if (bizData == -1 || !bizData || bizData.length == 0){  // if no search results 
+                await ScrapeTools.updateMetaStatus(-1, -1, target, 'yp');
                 console.log(`No search results for ${target['city']}-${target['state']}`)
                 break
             } 
@@ -99,7 +101,8 @@ var target = {};
                 // move on to the next page if there are relevant results, up to page 5
                 pageNum += 1; 
                 // scraper may not reach page 5 if there are no results on a page less than 5
-                nextPage = (relevantResults > 0 || pageNum <= 5) ? true : false;
+                // yellow pages may show the same repeated ads on every page, make sure results are > 7
+                nextPage = ((relevantResults > 0 && bizData.length > 7) || pageNum <= 5) ? true : false;
             }
         }
 
