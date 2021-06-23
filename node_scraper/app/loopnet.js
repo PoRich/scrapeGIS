@@ -39,7 +39,8 @@ var target = {
 }
 
 
-async function getSiteMap(targetLocation){
+async function getSiteMap(targetLocation, listing_type){
+
     var totalPages = 1
     var currentPage = 1;
 
@@ -51,7 +52,7 @@ async function getSiteMap(targetLocation){
     // =================== PART 1: Inital Crawl for site map ===================
     // RUN THIS ONCE; aftwards, load from database
     while (currentPage <= totalPages){
-        var pageURL = `https://www.loopnet.com/search/commercial-real-estate/${targetLocation.city}-${targetLocation.state}/for-sale/${currentPage}/`;
+        var pageURL = `https://www.loopnet.com/search/commercial-real-estate/${targetLocation.city}-${targetLocation.state}/for-${listing_type}/${currentPage}/`;
         var scrapeResult = await crawlSitemap(pageURL, page);
         // console.log(`scrapeResult ${JSON.stringify(scrapeResult)}`)
         totalPages = scrapeResult[0];
@@ -60,32 +61,38 @@ async function getSiteMap(targetLocation){
             // means no search results or failed to solve recaptcha 
             break;
         }
-        linkObj.forEach(e => saveListingUrl(e, targetLocation));
-        ScrapeTools.updateMetaStatus(currentPage, totalPages, targetLocation, 'loopnet')    
-        console.log(`******************** scraped ${targetLocation.city} page ${currentPage} ********************`)
+        linkObj.forEach(e => saveListingUrl(e, targetLocation, listing_type));
+        ScrapeTools.updateMetaStatus(currentPage, totalPages, targetLocation, 'loopnet'+'_'+listing_type)    
+        console.log(`******************** scraped ${listing_type} ${targetLocation.city} page ${currentPage} ********************`)
         // Increment page
         currentPage = currentPage + 1;
     }
     await browser.close();
 
-    return targetLocation;
+    return {target: targetLocation, type: listing_type};
     // TODO get next target city, state
+    
 }
 
-async function getListings(targetLocation, dateCutOff){
+async function getListings(instructions, dateCutOff){
+    
+    const targetLocation = instructions.target;
+    const listing_type = instructions.type;
+    
      // Start browser, open new page, prep use-agent 
     let browser = await puppeteer.launch({headless: true});
     let page = await browser.newPage();
     ScrapeTools.preparePageForTests(page);
     
     // =================== PART 2: Scrape profiles ===================
-    const listings = await getListingUrls(targetLocation, dateCutOff);
+    const listings = await getListingUrls(targetLocation, listing_type, dateCutOff);
     //const listings = ['https://www.loopnet.com/Listing/225-239-N-13th-St-Philadelphia-PA/22188169/'];
     
     while (listings.length > 0){
         let listing = listings.pop();
         console.log(`************ scraping listing ${listing} ************`)
-        const elementPayload = await scrapeElement(listing, page);
+        
+        const elementPayload = await scrapeElement(listing, page, listing_type);
         
         // combine convert facts arrays [new DOM structure] into single object
         if (elementPayload.factsRaw?.labels1){
@@ -171,7 +178,7 @@ async function getListings(targetLocation, dateCutOff){
         }
         
         // Process financial data 
-        if (elementPayload.financialsArray){
+        if (elementPayload.financialsArray && listing_type === 'sale'){
             // remove dollar signs and commas
             elementPayload.financialsArray = elementPayload.financialsArray.map((d, idx) => {
                 let _ = null;
@@ -241,14 +248,14 @@ async function crawlSitemap(pageURL, page){
 }
 
 // Save listing address and URL to databsae
-async function saveListingUrl(payload, target){
+async function saveListingUrl(payload, target, listing_type){
     try{
         await db.query('BEGIN');
-        const queryText = 'INSERT INTO hsing_data.loopnet (addr, href, target_plcidfp) \
-                         VALUES($1, $2, (select pcl.place_to_fp($3, $4))) ON CONFLICT DO NOTHING RETURNING l_id';
-        await db.query(queryText, [payload.addr, payload.href, target.city, target.state ]);
+        const queryText = 'INSERT INTO hsing_data.loopnet (addr, href, listing_type, target_plcidfp) \
+                         VALUES($1, $2, $3, (select pcl.place_to_fp($4, $5))) ON CONFLICT DO NOTHING RETURNING l_id';
+        await db.query(queryText, [payload.addr, payload.href, listing_type, target.city, target.state ]);
         await db.query('COMMIT');
-        console.log(`************** Saved Listing URL for ${payload.addr} **************`)
+        console.log(`************** Saved ${listing_type} Listing URL for ${payload.addr} **************`)
     } catch (e) {
         await db.query('ROLLBACK');
         throw e
@@ -256,7 +263,7 @@ async function saveListingUrl(payload, target){
 }
 
 // Retrieve listingURLs from database where meta is null or where date_scraped is earlier than the dateCutOff
-async function getListingUrls(_target, dateCutOff){
+async function getListingUrls(_target, _listing_type, dateCutOff){
     if (dateCutOff=== undefined) { 
         // default to today (dateformat is postgres convention YYYY/MM/DD)
         dateCutOff = `${new Date().getFullYear()}/${new Date().getMonth()+1}/${new Date().getDate()}`;
@@ -264,7 +271,8 @@ async function getListingUrls(_target, dateCutOff){
     try{
         const listingUrls = await db.query('select array_agg(href) listings from hsing_data.loopnet \
         where target_plcidfp=(select pcl.place_to_fp($1, $2)) \
-        and (meta is null or date_scraped < $3::date)', [_target.city, _target.state, dateCutOff]);
+        and (meta is null or date_scraped < $3::date) and listing_type=$4', 
+            [_target.city, _target.state, dateCutOff, _listing_type]);
         // console.log(`listingUrls - ${JSON.stringify(listingUrls)}`);
         return listingUrls['rows'][0]['listings'];
     } catch(e){
@@ -273,7 +281,7 @@ async function getListingUrls(_target, dateCutOff){
 }
 
 // Scrape element (profile page of listing)
-async function scrapeElement(elementURL, page){
+async function scrapeElement(elementURL, page, listing_type){
     const _waitForCss = 'ul[class="property-timestamp"]'; // img container
     const _badUrlCss = 'div[class="off-market-banner"]';
 
@@ -288,17 +296,17 @@ async function scrapeElement(elementURL, page){
                 dateCreated: 'N/A', 
                 dateUpdated: 'N/A'},
             };
-    }else if (initLoad){
+    } else if (initLoad){
         // or payload object (if recaptcha was found & solved, prepPage will recursively call crawlSitemap and return payload)
         return initLoad 
     } // if nothing was returned, proceed with the below
     
-    return page.evaluate(() => {
+    return page.evaluate((_listing_type) => {
         let inContract = document.querySelector('span.title-pill')?.innerHTML === "Under Contract";
 
         // Geocode 
-        const lon_regex = /[\?&]lon=(-?\d{1,2}\.\d{4,})[\?&]/;
-        const lat_regex = /[\?&]lat=(-?\d{1,2}\.\d{4,})[\?&]/;
+        const lon_regex = /[\?&]lon=(-?\d{1,3}\.\d{3,})[\?&]/;
+        const lat_regex = /[\?&]lat=(-?\d{1,3}\.\d{3,})[\?&]/;
         // const mapSrc = document.querySelector('iframe.interactive-map')
         // const mapSrc = document.querySelector('iframe[class="interactive-map"]')
         const srcArray = Array.from(document.querySelectorAll('iframe')).map(e => e.getAttribute("src")).filter( e => {if(e){return e}});
@@ -325,11 +333,19 @@ async function scrapeElement(elementURL, page){
         }
 
         // List of image sources ( first and last element always null )
-        let imgs = Array.from(document.querySelectorAll('div[class="mosaic-carousel "] div.mosaic-tile'))
+        let imgs = Array.from(document.querySelectorAll('div.mosaic-carousel div.mosaic-tile'))
                          .map(e=> e.getAttribute('data-src'))
                          .filter(i=>{if(i){return i}}); //filter out null elements
+        
+        if(imgs.length === 0){ // lease listings have different image DOM structure
+        const validImgRegex = /^https:\/\/(?!maps)/;
+        imgs = Array.from(document.querySelectorAll('div.mosaic-carousel div.mosaic-tile img'))
+                    .map(e => e.getAttribute('src'))
+                    .filter(i=>{if(validImgRegex.exec(i)){return i}}) //filter out maptiles
+        }
 
-        let execSum = document.querySelector('div.sales-notes-text')?.innerText;
+        let execSumSelector = _listing_type === 'sale' ? 'div.sales-notes-text' : 'p.pre-wrap';
+        let execSum = document.querySelector(execSumSelector)?.innerText.replace(/\n/g, '').trim();
 
         // Odd ordered elements are keys, even ordered elements are values 
         // Assuming old DOM structure 
@@ -357,13 +373,30 @@ async function scrapeElement(elementURL, page){
             labels3: labels3, 
             data3: data3,
         }
+        
+        let financialsArray = null;
+        let leaseData = null;
+        let tenantData = null;
+        if (_listing_type === 'sale'){
+            // set of two or three (label, annual, annual per sqft)
+            // length of 21 expected
+            financialsArray = Array.from(document.querySelectorAll('table[class="property-data summary financial"] > tbody > tr > td')).map(e=>e.innerText);
+            // [ "Net Operating Income", "$12,892", "$1.85" ]
+            let noiArray = Array.from(document.querySelectorAll('table[class="property-data summary financial"] > tfoot > tr > td')).map(e=>e.innerText);
+            financialsArray.push(...noiArray); // append noi 
+        } else { 
+            // lease info  
+            let leaseHeader = Array.from(document.querySelectorAll('div#available-spaces div.available-spaces__header li')).filter(d => d.innerText ? true : false).map(d => d.innerText);
+            let leaseData1 = Array.from(document.querySelectorAll('div#available-spaces div.available-spaces__content ')).map(d => d.innerText.split('\n').filter(d=> {return d.trim() !== 'Brochure'})) // this is picking up tenants 
+            let leaseData2 = Array.from(document.querySelectorAll('ul.available-spaces__accordion-data')).map(d => d.innerText.split('\n'));
+            leaseData = leaseData1 ? leaseData1 : (leaseData2 ? leaseData2 : null); 
+            if (leaseData) {leaseData.splice(0, 0, leaseHeader);}
 
-        // set of two or three (label, annual, annual per sqft)
-        // length of 21 expected
-        let financialsArray = Array.from(document.querySelectorAll('table[class="property-data summary financial"] > tbody > tr > td')).map(e=>e.innerText);
-        // [ "Net Operating Income", "$12,892", "$1.85" ]
-        let noiArray = Array.from(document.querySelectorAll('table[class="property-data summary financial"] > tfoot > tr > td')).map(e=>e.innerText);
-        financialsArray.push(...noiArray); // append noi 
+            // tenant info 
+            let tenantHeader = Array.from(document.querySelectorAll('div#select-tenant div.available-spaces__header li')).filter(d => d.innerText ? true : false).map(d => d.innerText);
+            tenantData = Array.from(document.querySelectorAll('div#select-tenant div.available-spaces__content ')).map(d => d.innerText.split('\n'));
+            if (tenantData.length >0) {tenantData.splice(0, 0, tenantHeader);}
+        }
 
         // [ "Listing ID: 22680073", "Date Created: 4/8/2021", "Last Updated: 6/3/2021" ]
         // REGEX Patterns 
@@ -377,9 +410,19 @@ async function scrapeElement(elementURL, page){
         }
 
         const brokers = Array.from(document.querySelectorAll('div.container-contact-form > ul > li'))
-                             .map( e => e.innerText.replaceAll('\n', ' ')) // replace \n
+                             .map( e => e.innerText.replaceAll('\n', ' ').trim()) // replace \n
                              .filter(i=>{if(i){return i}}); //filter out null elements;
-        const brokerPhone = Array.from(document.querySelectorAll('div.container-contact-form > div.cta-phone-number')).map( e => e.innerText);
+        
+        let brokerPhone = []
+        const brokerBioPhone = document.querySelectorAll('span.broker-bio__info__phone');
+        if(brokerBioPhone?.length > 0){
+            // Phone numbers repeat, take ever other element
+            Array.from(brokerBioPhone).forEach((d,idx)=>{if(idx%2===0){brokerPhone.push(d.textContent.trim())}});
+        }
+        else{
+            brokerPhone = Array.from(document.querySelectorAll('div.container-contact-form > div.cta-phone-number')).map( e => e.innerText);
+        }
+
         const brokerAddr = Array.from(document.querySelectorAll('div.container-contact-form > div.cta-address')).map( e => e.innerText.replaceAll('\n', ' '));
 
         return {
@@ -389,7 +432,8 @@ async function scrapeElement(elementURL, page){
             execSum: execSum, // text
             factsArray: factsArray, // array
             factsRaw: factsRaw, // array of arrays
-            financialsArray: financialsArray, // array
+            financialsArray: financialsArray, // array (sale listings => data needs cleaning)
+            financials: leaseData ? (tenantData.length > 0 ? {tenant_data: tenantData, lease_data: leaseData}:{lease_data: leaseData}): null, // object
             meta: meta, // obj
             brokers: { // obj
                 name: [...brokers], 
@@ -397,7 +441,7 @@ async function scrapeElement(elementURL, page){
                 addr: [...brokerAddr],
             }
         };
-    });   
+    }, listing_type);   
 }
 
 // Save listing details to databsae
@@ -429,10 +473,15 @@ async function saveListing(p){
 
 // ===================== function call =====================
 (async () => {
-    //getSiteMap(target) .then(t => getListings(t));
-    
-    // To update listing details (not sitemap of actual listings) run the below
-    // default to today (dateformat is postgres convention YYYY/MM/DD)
-     getListings(target, '2021/06/16');
+    const LISTING_TYPE = ['lease'];
+    LISTING_TYPE.forEach(listing_type => { 
+        //getSiteMap(target, listing_type) .then(t => getListings(t));
+
+        // To update listing details (not sitemap of actual listings) run the below
+        // default to today (dateformat is postgres convention YYYY/MM/DD)
+
+        getListings({target: target, type: listing_type}, '2021/06/23');
+    });    
     return;
+    
 })();

@@ -33,18 +33,24 @@ await page.setViewport({  // set screen resolution
  });
 }
 
+// THESE ARE FOR YELP, NEED TO RECALIBRATE FOR YELLOW PAGES 
+const recaptchaCss = '.g-recaptcha'; 
+const recaptchaSubmitCss = '.ybtn.ybtn--primary';
 
 
 // =================== STEP 1: INITIAL SCRAPE ===================
 var target = {};
 
 (async () => {
+    /*
     // pull list of states to scrape 
     var states_hitlist = await ScrapeTools.getTargetState('yp');
     //console.log(`state list ${states_hitlist}`);
     while (states_hitlist.length >0) {
         await initial_scrape(states_hitlist.pop());
     }
+    */
+    geocodePostFacto();
 })();
 
 
@@ -187,3 +193,73 @@ async function saveBizYP(payload, _target, url){
         throw e
     }
 }
+
+
+/**
+ * Revisits yellow pages business profile pages and scrapes geocode info
+ */
+ async function geocodePostFacto(){
+    // get urls 
+    const urlsQuery = await db.query('select array_agg(profile_url) urls from dental_data.ypages where the_geom is null');
+    let profileURLs = urlsQuery['rows'][0]['urls'];
+
+    // Start browser, open new page, prep use-agent 
+    let browser = await puppeteerExtra.launch({headless: true});
+    let page = await browser.newPage();
+    ScrapeTools.preparePageForTests(page);
+
+    while (profileURLs.length > 0){
+        let profileURL = profileURLs.pop(); 
+        let url = await getDirectionsURL(profileURL, page, 'a.directions');
+        
+        if (url === -1){
+            console.log(`************ unable to get DirectionURL for ${profileURL} ************`)    
+            continue;
+        }
+
+        console.log(`************ scraping geom from ${url} ************`)
+        let payload = await scrapeGeom(url, page, 'div#map img');
+        console.log(`payload -> ${JSON.stringify(payload)}`);
+        if (payload !== -1){
+            // save lnglat 
+            try{
+                await db.query('BEGIN');
+                const queryText = 'update dental_data.ypages set \
+                        the_geom=ST_SetSRID(ST_MakePoint($1::float, $2::float), 4269) where profile_url=$3';
+                await db.query(queryText, [payload[0], payload[1], profileURL]);
+                await db.query('COMMIT');
+            } catch (e) {
+                console.log(`failed to save geom: ${e}`)
+                await db.query('ROLLBACK');
+                throw e
+            }
+        }
+    }
+    await browser.close();
+    return;
+}
+
+async function getDirectionsURL(pageURL, page, waitForCss){
+    const r = await ScrapeTools.prepPage(pageURL, page, scrapeGeom, waitForCss, recaptchaCss, recaptchaSubmitCss);
+    if (r===-1){
+        return -1;
+    }
+    return page.evaluate((_waitForCss)=>{
+        var directionlink = document.querySelector(_waitForCss).href;
+        return directionlink;
+    }, waitForCss)
+}
+
+async function scrapeGeom(pageURL, page, waitForCss){
+    await ScrapeTools.prepPage(pageURL, page, scrapeGeom, waitForCss, recaptchaCss, recaptchaSubmitCss);
+    return page.evaluate((_waitForCss)=>{ 
+        var mapSrc = document.querySelector(_waitForCss).getAttribute('src');
+        let lon_regex = /%2C(-?\d{1,3}\.\d{3,})&zoom/; // '%2C' is hex encoding for comma
+        let lat_regex = /markers=(-?\d{1,3}\.\d{3,})%2C/; // '%2C' is hex encoding for comma
+        let lngLat = null
+        if (lon_regex.exec(mapSrc)){
+            lngLat = [lon_regex.exec(mapSrc)[1], lat_regex.exec(mapSrc)[1]]
+        }
+        return lngLat ? lngLat : -1;
+    }, waitForCss);
+};
