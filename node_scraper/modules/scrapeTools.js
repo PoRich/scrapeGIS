@@ -46,9 +46,12 @@ module.exports = {
         } else if (site == 'yp') {
             status = 'yp_status';
             max = 'yp_max_pages';   
-        } else if (site == 'loopnet') {
-            status = 'loopnet_status';
-            max = 'loopnet_max_pages';   
+        } else if (site == 'loopnet_sale') {
+            status = 'loopnet_sale_status';
+            max = 'loopnet_sale_max_pages';   
+        } else if (site == 'loopnet_lease') {
+            status = 'loopnet_lease_status';
+            max = 'loopnet_lease_max_pages';   
         } else if (site == 'bcbs'){
             status = 'bcbs_status';
             max = 'bcbs_max_pages';   
@@ -77,10 +80,14 @@ module.exports = {
         } else if (site == 'yp'){
             queryText = 'update tools.scrape_meta set (yp_status, yp_max_pages) = ($1, $2) \
                                where state_abbrev=upper($3) and city=$4'; 
-        } else if (site == 'loopnet'){
-            queryText = 'update tools.scrape_meta set (loopnet_status, loopnet_max_pages) = ($1, $2) \
+        } else if (site == 'loopnet_sale'){
+            queryText = 'update tools.scrape_meta set (loopnet_sale_status, loopnet_sale_max_pages) = ($1, $2) \
+                               where state_abbrev=upper($3) and city=$4'; 
+        } else if (site == 'loopnet_lease'){
+            queryText = 'update tools.scrape_meta set (loopnet_lease_status, loopnet_lease_max_pages) = ($1, $2) \
                                where state_abbrev=upper($3) and city=$4'; 
         }
+        
         try{
             await db.query('BEGIN');
             await db.query(queryText, [_currentPage, _totalPages, _target['state'], _target['city'] ]);
