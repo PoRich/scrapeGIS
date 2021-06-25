@@ -321,11 +321,11 @@ async function scrapeAddress(pageURL, page){
         
         // geocode 
         var mapSrc = document.querySelectorAll('img[alt="Map"]')[0].getAttribute('srcset');
-        const lon_regex = /%2C(-?\d{1,2}\.\d{3,})&markers/; // '%2C' is hex encoding for comma
-        const lat_regex = /center=(-?\d{1,2}\.\d{3,})%2C/; // '%2C' is hex encoding for comma
+        var latLngRegex = /(-?\d{1,3}\.\d{3,})%2C(-?\d{1,3}\.\d{3,})/;
+        var latLngMatch = latLngRegex.exec(mapSrc);
         let lngLat = null
-        if (lon_regex.exec(mapSrc)){
-            lngLat = [lon_regex.exec(mapSrc)[1], lat_regex.exec(mapSrc)[1]]
+        if (latLngMatch){
+            lngLat = [latLngMatch[2], latLngMatch[1]]
         }
         
 
@@ -419,7 +419,7 @@ async function geocodePostFacto(){
     let urls = urlsQuery['rows'][0]['urls'];
 
     // Start browser, open new page, prep use-agent 
-    let browser = await puppeteerExtra.launch({headless: true});
+    let browser = await puppeteerExtra.launch({headless: false});
     let page = await browser.newPage();
     ScrapeTools.preparePageForTests(page);
 
@@ -441,6 +441,8 @@ async function geocodePostFacto(){
                 await db.query('ROLLBACK');
                 throw e
             }
+        }else {
+            db.query('update dental_data.yelp set no_geocode=1 where profile_url=$1', [url])
         }
     }
     await browser.close();
@@ -449,14 +451,17 @@ async function geocodePostFacto(){
 
 async function scrapeGeom(pageURL, page){
     const _waitForCss = 'img[alt="Map"]';
-    await ScrapeTools.prepPage(pageURL, page, scrapeGeom, _waitForCss, recaptchaCss, recaptchaSubmitCss);
+    const r = await ScrapeTools.prepPage(pageURL, page, scrapeGeom, _waitForCss, recaptchaCss, recaptchaSubmitCss);
+    if(r===-1){
+        return -1;
+    }
     return page.evaluate(()=>{ 
         var mapSrc = document.querySelectorAll('img[alt="Map"]')[0].getAttribute('srcset');
-        const lon_regex = /%2C(-?\d{1,3}\.\d{3,})&markers/; // '%2C' is hex encoding for comma
-        const lat_regex = /center=(-?\d{1,3}\.\d{3,})%2C/; // '%2C' is hex encoding for comma
+        var latLngRegex = /(-?\d{1,3}\.\d{3,})%2C(-?\d{1,3}\.\d{3,})/;
+        var latLngMatch = latLngRegex.exec(mapSrc);
         let lngLat = null
-        if (lon_regex.exec(mapSrc)){
-            lngLat = [lon_regex.exec(mapSrc)[1], lat_regex.exec(mapSrc)[1]]
+        if (latLngMatch){
+            lngLat = [latLngMatch[2], latLngMatch[1]]
         }
         return lngLat ? lngLat : -1;
     });

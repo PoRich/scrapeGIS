@@ -217,8 +217,9 @@ async function saveBizYP(payload, _target, url){
         
         if (url === -1){
             console.log(`************ unable to get DirectionURL for ${profileURL} ************`)    
+            db.query('update dental_data.ypages set no_geocode=1 where profile_url=$1', [profileURL])
             continue;
-        }
+        } 
 
         console.log(`************ scraping geom from ${url} ************`)
         let payload = await scrapeGeom(url, page, 'div#map img');
@@ -236,6 +237,8 @@ async function saveBizYP(payload, _target, url){
                 await db.query('ROLLBACK');
                 throw e
             }
+        } else {
+            db.query('update dental_data.ypages set no_geocode=1 where profile_url=$1', [profileURL])
         }
     }
     await browser.close();
@@ -254,14 +257,19 @@ async function getDirectionsURL(pageURL, page, waitForCss){
 }
 
 async function scrapeGeom(pageURL, page, waitForCss){
-    await ScrapeTools.prepPage(pageURL, page, scrapeGeom, waitForCss, recaptchaCss, recaptchaSubmitCss);
+    const r = await ScrapeTools.prepPage(pageURL, page, scrapeGeom, waitForCss, recaptchaCss, recaptchaSubmitCss);
+    if (r === -1){
+        return -1;
+    }
     return page.evaluate((_waitForCss)=>{ 
         var mapSrc = document.querySelector(_waitForCss).getAttribute('src');
-        let lon_regex = /%2C(-?\d{1,3}\.\d{3,})&zoom/; // '%2C' is hex encoding for comma
-        let lat_regex = /markers=(-?\d{1,3}\.\d{3,})%2C/; // '%2C' is hex encoding for comma
+        // let lon_regex = /%2C(-?\d{1,3}\.\d{3,})&zoom/; // '%2C' is hex encoding for comma
+        // let lat_regex = /markers=(-?\d{1,3}\.\d{3,})%2C/; // '%2C' is hex encoding for comma
+        let lngLatRegex = /(-?\d{1,3}\.\d{3,})%2C(-?\d{1,3}\.\d{3,})/
+        let lngLatMatch = lngLatRegex.exec(mapSrc);
         let lngLat = null
-        if (lon_regex.exec(mapSrc)){
-            lngLat = [lon_regex.exec(mapSrc)[1], lat_regex.exec(mapSrc)[1]]
+        if (lngLatMatch){
+            lngLat = [lngLatMatch[2], lngLatMatch[1]]
         }
         return lngLat ? lngLat : -1;
     }, waitForCss);
