@@ -140,6 +140,7 @@ module.exports = {
             }
         } catch (error) {
             console.log(`failed to open the page: ${pageURL} with error: ${error}`);
+            return -1;
         }
     
         /// Act human
@@ -151,13 +152,13 @@ module.exports = {
             })
 
         try{ // Wait 10 seconds or target css selector to load
-            await page.waitForSelector(waitForCss, {timeout: 10000});
-            return;
+            await page.waitForSelector(waitForCss, {timeout: 5000});
+            return ;
         } catch (e) {
             console.log(`No results on page: ${e} | Looking for Recaptcha ... `)
             // ==================== RECAPTCHA CODE BLOCK [START] ====================
             try{ // TODO - get recaptcha css selector 
-                await page.waitForSelector(recaptchaCss, {timeout: 5000});
+                await page.waitForSelector(recaptchaCss, {timeout: 5001});
                 await page.solveRecaptchas();  // puppeteer 2captcha plugin
                 await Promise.all([
                     page.waitForNavigation(),
