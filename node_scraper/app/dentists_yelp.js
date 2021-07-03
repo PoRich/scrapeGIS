@@ -415,11 +415,11 @@ insert into biz.dentists_redo(url) select distinct src from dental_data.yelp whe
  */
 async function geocodePostFacto(){
     // get urls 
-    const urlsQuery = await db.query('select array_agg(profile_url) urls from dental_data.yelp where the_geom is null');
+    const urlsQuery = await db.query('select array_agg(profile_url) urls from dental_data.yelp where the_geom is null and no_geocode is null');
     let urls = urlsQuery['rows'][0]['urls'];
 
     // Start browser, open new page, prep use-agent 
-    let browser = await puppeteerExtra.launch({headless: false});
+    let browser = await puppeteerExtra.launch({headless: true});
     let page = await browser.newPage();
     ScrapeTools.preparePageForTests(page);
 
