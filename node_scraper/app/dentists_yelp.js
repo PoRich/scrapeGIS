@@ -1,13 +1,12 @@
 const puppeteerExtra = require('puppeteer-extra')  // Any number of plugins can be added through `puppeteer.use()`
 const StealthPlugin = require('puppeteer-extra-plugin-stealth')
 const RecaptchaPlugin = require('puppeteer-extra-plugin-recaptcha')
-const AdblockerPlugin = require('puppeteer-extra-plugin-adblocker')  // Add adblocker plugin to block all ads and trackers (saves bandwidth)
 require('dotenv').config();
 const db = require('../db');
 const ScrapeTools = require('../modules/scrapeTools.js');
-//puppeteerExtra.use(require('puppeteer-extra-plugin-repl')())
-puppeteerExtra.use(StealthPlugin());
-puppeteerExtra.use(AdblockerPlugin({ blockTrackers: true }));
+
+puppeteerExtra.use(StealthPlugin());  
+
 puppeteerExtra.use(
     RecaptchaPlugin({
         provider:{
@@ -18,29 +17,13 @@ puppeteerExtra.use(
     })
 )
 
-require('dotenv').config();
-
-// User-Agent helper
-const preparePageForTests = async (page) => {
-const userAgent = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_14_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.88 Safari/537.36';
-//const userAgent = 'Mozilla/5.0 (iPhone; CPU iPhone OS 7_1_2 like Mac OS X) AppleWebKit/537.51.2 (KHTML, like Gecko) Version/7.0 Mobile/11D257 Safari/9537.53';
-await page.setUserAgent(userAgent);
-await page.setViewport({  // set screen resolution
-    width: 1366,
-    height: 768   
- });
-}
-
-
 const recaptchaCss = '.g-recaptcha'; 
 const recaptchaSubmitCss = '.ybtn.ybtn--primary';
 
-
-
-// =================== STEP 1: INITIAL SCRAPE ===================
+// =================== RUN FUNCTION ===================
 var target = {};
 
-(async () => {
+async function run(){
     /*
     // pull list of states to scrape 
     var states_hitlist = await ScrapeTools.getTargetState('yelp');
@@ -49,9 +32,17 @@ var target = {};
         await initial_scrape(states_hitlist.pop());
     }
     */
-    geocodePostFacto();
-})();
 
+    // Start browser, open new page, prep use-agent 
+    let browser = await puppeteerExtra.launch({headless: true});
+    let page = await browser.newPage();
+    page = await ScrapeTools.preparePageForTests(page);
+    page = await ScrapeTools.blockResources(page, ['font', 'media', 'image', 'other']);
+    await geocodePostFacto(page);
+    await browser.close();
+};
+
+// =================== STEP1: initial Scrape ===================
 /**
  * takes tiger list of cities and saves help search results 
  *  @result null;
@@ -60,7 +51,7 @@ async function initial_scrape(targetState) {
     // prep chronium 
     let browser = await puppeteerExtra.launch({headless: true});
     let page = await browser.newPage();
-    await preparePageForTests(page);
+    await ScrapeTools.preparePageForTests(page);
     
     // pull city to scrape from db
     var _target = await ScrapeTools.getTargetCity(targetState, 'yelp'); 
@@ -145,7 +136,7 @@ select distinct city, state from dental_data.yelp where addr is null and biz_nam
     // prep chronium 
     let browser = await puppeteerExtra.launch({headless: true});
     let page = await browser.newPage();
-    await preparePageForTests(page);
+    await ScrapeTools.preparePageForTests(page);
     
     // pull urls where address is missing from db
     var URLs = await getIncompleteURLs(); 
@@ -413,15 +404,14 @@ insert into biz.dentists_redo(url) select distinct src from dental_data.yelp whe
 /**
  * Revisits yelp business profile pages and scrapes geocode info
  */
-async function geocodePostFacto(){
+async function geocodePostFacto(page){
     // get urls 
     const urlsQuery = await db.query('select array_agg(profile_url) urls from dental_data.yelp where the_geom is null and no_geocode is null');
     let urls = urlsQuery['rows'][0]['urls'];
-
-    // Start browser, open new page, prep use-agent 
-    let browser = await puppeteerExtra.launch({headless: true});
-    let page = await browser.newPage();
-    ScrapeTools.preparePageForTests(page);
+    if (!urls){
+        console.log(`geocodePostFacto: No urls to update from db query`)
+        return;
+    }
 
     while (urls.length > 0){
         let url = urls.pop();
@@ -433,19 +423,30 @@ async function geocodePostFacto(){
             try{
                 await db.query('BEGIN');
                 const queryText = 'update dental_data.yelp set \
-                        the_geom=ST_SetSRID(ST_MakePoint($1::float, $2::float), 4269) where profile_url=$3';
-                await db.query(queryText, [payload[0], payload[1], url]);
+                        (the_geom, last_update)=(ST_SetSRID(ST_MakePoint($1::float, $2::float), 4269), now()) where profile_url=$3 returning *';
+                const r = await db.query(queryText, [payload[0], payload[1], url]);
                 await db.query('COMMIT');
+                console.log(`Saved geocode for d_id: ${r['rows'][0]['d_id']}} -> dental_data.yelp`)
             } catch (e) {
                 console.log(`failed to save geom: ${e}`)
                 await db.query('ROLLBACK');
                 throw e
             }
         }else {
-            db.query('update dental_data.yelp set no_geocode=1 where profile_url=$1', [url])
+            try{
+                await db.query('BEGIN');
+                const r = await db.query('update dental_data.yelp set no_geocode=1 where profile_url=$1 returning *', [url])
+                await db.query('COMMIT');
+                console.log(`Set no_geocde for d_id: ${r['rows'][0]['d_id']}} -> dental_data.yelp`)
+            } catch(e){
+                await db.query('ROLLBACK');
+                console.log(`failed to save no_geocode on ${url}: ${e}`)
+                throw e
+            }
+            
         }
     }
-    await browser.close();
+    
     return;
 }
 
@@ -466,3 +467,5 @@ async function scrapeGeom(pageURL, page){
         return lngLat ? lngLat : -1;
     });
 };
+
+run();
