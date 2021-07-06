@@ -39,3 +39,14 @@ ___
 * WellCare
 
 
+---
+Notes from https://www.youtube.com/watch?v=ITPDmVaOou0&t=932s
+## Detection 
+1. Proxy Server (Datacenter, Residential, Specialized, Super Proxy)
+* proxy rotation and session management - should be sending the same cookie from the same IP; Can use residential proxies for high value targets and ignore everything else  
+2. Headless browsers (JS rendering) - Puppeteer, Playwright, Secret Agent
+3. Fingerprinting - browswer, operating system, browser extensions, audio/video hardware; fingerprint needs to match browswers and paired to sessions
+## Methods 
+1. Public API scraping (avoid parsing HTML, may require a session which can be created/refreshed from a browser)
+2. Mobile API scrapign usign a man-in-the-middle proxy to reverse engineer mobile APIs - install custom certificate to phone and man-in-the-middle software to your laptop 
+3. Solving Challenges/Recaptcha - 
