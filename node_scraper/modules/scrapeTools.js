@@ -153,6 +153,25 @@ module.exports = {
         });
         return page;
     },
+    // Optimize bandwith/speed by blocking resources from loading
+    async blockResources(page, resourceArray){
+        /**
+         * NOTE: this function is NOT COMPATIBLE WITH 'puppeteer-extra-plugin-adblocker' plugin
+         * Available types include
+         * document, stylesheet, image, media, font, script, texttrack, xhr, fetch, eventsource, websocket, manifest, other.
+         */
+        await page.setRequestInterception(true);
+        page.on('request', (req) => {
+            if(resourceArray.includes(req.resourceType()) ){
+                req.abort();
+            }
+            else {
+                req.continue();
+            }   
+        }); 
+
+        return page;
+    },
     // Navigate, simulate human, wait for/solve recaptcha
     /**
      * 
@@ -171,7 +190,9 @@ module.exports = {
                     recaptchaCss, recaptchaSubmitCss, badUrlCss, blockedUrlCss, 
                     scrapeFunctionArg){
         try { // Navigate to URL
-            await page.goto(pageURL, { waitUntil: 'load', timeout: 10001} );
+            await page.goto(pageURL, { 
+                waitUntil: 'load', // 'domcontentloaded', 
+                timeout: 10001} );
             console.log(`opened the page ${pageURL}`);
             if (badUrlCss){// Try to test if page is no longer active 
                 try{ 
@@ -212,7 +233,7 @@ module.exports = {
             })
 
         try{ // Wait 10 seconds or target css selector to load
-            await page.waitForSelector(waitForCss, {timeout: 5000});
+            await page.waitForSelector(waitForCss, {timeout: 50002});
             return ;
         } catch (e) {
             console.log(`No results on page: ${e} | Looking for Recaptcha ... `)

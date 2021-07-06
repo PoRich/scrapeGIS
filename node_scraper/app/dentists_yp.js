@@ -1,15 +1,13 @@
 const puppeteerExtra = require('puppeteer-extra')  // Any number of plugins can be added through `puppeteer.use()`
 const StealthPlugin = require('puppeteer-extra-plugin-stealth')
 const RecaptchaPlugin = require('puppeteer-extra-plugin-recaptcha')
-const AdblockerPlugin = require('puppeteer-extra-plugin-adblocker')  // Add adblocker plugin to block all ads and trackers (saves bandwidth)
+const AdblockerPlugin = require('puppeteer-extra-plugin-adblocker')
 require('dotenv').config();
 const db = require('../db')
 const ScrapeTools = require('../modules/scrapeTools.js');
 
-
-//puppeteerExtra.use(require('puppeteer-extra-plugin-repl')())
 puppeteerExtra.use(StealthPlugin());
-puppeteerExtra.use(AdblockerPlugin({ blockTrackers: true }));
+puppeteerExtra.use(AdblockerPlugin())
 puppeteerExtra.use(
     RecaptchaPlugin({
         provider:{
@@ -20,19 +18,6 @@ puppeteerExtra.use(
     })
 )
 
-require('dotenv').config();
-
-// User-Agent helper
-const preparePageForTests = async (page) => {
-const userAgent = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_14_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.88 Safari/537.36';
-//const userAgent = 'Mozilla/5.0 (iPhone; CPU iPhone OS 7_1_2 like Mac OS X) AppleWebKit/537.51.2 (KHTML, like Gecko) Version/7.0 Mobile/11D257 Safari/9537.53';
-await page.setUserAgent(userAgent);
-await page.setViewport({  // set screen resolution
-    width: 1366,
-    height: 768   
- });
-}
-
 // THESE ARE FOR YELP, NEED TO RECALIBRATE FOR YELLOW PAGES 
 const recaptchaCss = '.g-recaptcha'; 
 const recaptchaSubmitCss = '.ybtn.ybtn--primary';
@@ -41,7 +26,7 @@ const recaptchaSubmitCss = '.ybtn.ybtn--primary';
 // =================== STEP 1: INITIAL SCRAPE ===================
 var target = {};
 
-(async () => {
+async function run() {
     /*
     // pull list of states to scrape 
      var states_hitlist = await ScrapeTools.getTargetState('yp');
@@ -51,8 +36,14 @@ var target = {};
         await initial_scrape(states_hitlist.pop());
     }
     */
-    geocodePostFacto();
-})();
+
+    // Start browser, open new page, prep use-agent 
+    let browser = await puppeteerExtra.launch({headless: false});
+    let page = await browser.newPage();
+    page = await ScrapeTools.preparePageForTests(page);
+    await geocodePostFacto(page);
+    await browser.close();
+};
 
 
 /**
@@ -63,7 +54,7 @@ var target = {};
     // prep chronium 
     let browser = await puppeteerExtra.launch({headless: true});
     let page = await browser.newPage();
-    await preparePageForTests(page);
+    await ScrapeTools.preparePageForTests(page);
     
     // pull city to scrape from db
 
@@ -201,15 +192,15 @@ async function saveBizYP(payload, _target, url){
 /**
  * Revisits yellow pages business profile pages and scrapes geocode info
  */
- async function geocodePostFacto(){
+ async function geocodePostFacto(page){
     // get urls 
     const urlsQuery = await db.query('select array_agg(profile_url) urls from dental_data.ypages where the_geom is null and no_geocode is null');
     let profileURLs = urlsQuery['rows'][0]['urls'];
 
-    // Start browser, open new page, prep use-agent 
-    let browser = await puppeteerExtra.launch({headless: true});
-    let page = await browser.newPage();
-    ScrapeTools.preparePageForTests(page);
+    if(!profileURLs){
+        console.log(`geocodePostFacto: No URLS to update from db query`)
+        return;
+    }
 
     while (profileURLs.length > 0){
         let profileURL = profileURLs.pop(); 
@@ -241,7 +232,6 @@ async function saveBizYP(payload, _target, url){
             db.query('update dental_data.ypages set no_geocode=1 where profile_url=$1', [profileURL])
         }
     }
-    await browser.close();
     return;
 }
 
@@ -274,3 +264,6 @@ async function scrapeGeom(pageURL, page, waitForCss){
         return lngLat ? lngLat : -1;
     }, waitForCss);
 };
+
+
+run();
