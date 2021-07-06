@@ -44,6 +44,7 @@ var target = {};
     /*
     // pull list of states to scrape 
     var states_hitlist = await ScrapeTools.getTargetState('yelp');
+    //var states_hitlist = ['TX'];
     while (states_hitlist.length >0) {
         await initial_scrape(states_hitlist.pop());
     }
@@ -72,48 +73,31 @@ async function initial_scrape(targetState) {
         //target['county'] = _target[2];
 
         console.log(`========= SCRAPING YELP city: ${target['city']}, state ${target['state']} ==============`);
-        var url = `https://www.yelp.com/search?find_desc=Dentists&find_loc=${target['city']}%2C+${target['state']}`
+        var totalPages = 1;
 
-        // scrape page 1 of general search results 
-        var p = await scrapeSearch(url, page) 
-        var bizData = p[1];
-
-        if (bizData){   
-            for(let i=0; i<bizData.length; i=i+1){
-                //console.log(`profile_url ${bizData[i]['profile_url']}`)
-                await saveBiz(bizData[i], target, url)
-                console.log(`Saved ${bizData[i]['name']} to db`)
-            }
-            var totalPages = p[0];
-        }
-        else {
-            var totalPages = -1;
-        }
-        await ScrapeTools.updateMetaStatus(1, totalPages, target, 'yelp');
-        
-        // scrape page >1 of general search results 
-        if (totalPages > 1){
-            for(let j=2; j<=totalPages; j=j+1){
-                url = `https://www.yelp.com/search?find_desc=Dentists&find_loc=${target['city']}%2C+${target['state']}&start=${(j-1)*10}`
-                p = await scrapeSearch(url, page)
-                if (p == -1){ // no results detected
-                    continue 
-                } 
-                else if (p.length == 2) { // first item is the page number
-                    bizData = p[1];    
-                    for(let k=0; k<bizData.length; k=k+1){
-                        await saveBiz(bizData[k], target, url)
-                        console.log(`Saved ${bizData[k]['name']} to db`)
-                    }
-                    await ScrapeTools.updateMetaStatus(j, totalPages, target, 'yelp');
+        for(let j=1; j<=totalPages; j=j+1){
+            url = `https://www.yelp.com/search?find_desc=Dentists&find_loc=${target['city']}%2C+${target['state']}&start=${(j-1)*10}`
+            p = await scrapeSearch(url, page)
+            if (p == -1){ // no results detected
+                await ScrapeTools.updateMetaStatus(-1, -1, target, 'yelp');
+                continue 
+            } 
+            else if (p.length == 2) { // first item is the page number
+                totalPages = p[0]; // update total pages (this may change as you paginate through results)
+                bizData = p[1];    
+                for(let k=0; k<bizData.length; k=k+1){
+                    await saveBiz(bizData[k], target, url)
+                    console.log(`Saved ${bizData[k]['name']} to db`)
                 }
+                await ScrapeTools.updateMetaStatus(j, totalPages, target, 'yelp');
             }
         }
+        // scrape individual business pages where address is missing 
         var d = await detail_scrape(target, page);
 
-    // get next target 
-    _target = await ScrapeTools.getTargetCity(targetState, 'yelp'); 
-    console.log(`next target city ${_target}`);
+        // get next target 
+        _target = await ScrapeTools.getTargetCity(targetState, 'yelp'); 
+        console.log(`next target city ${_target}`);
     }
 
     await browser.close();
@@ -337,11 +321,11 @@ async function scrapeAddress(pageURL, page){
         
         // geocode 
         var mapSrc = document.querySelectorAll('img[alt="Map"]')[0].getAttribute('srcset');
-        const lon_regex = /%2C(-?\d{1,2}\.\d{3,})&markers/; // '%2C' is hex encoding for comma
-        const lat_regex = /center=(-?\d{1,2}\.\d{3,})%2C/; // '%2C' is hex encoding for comma
+        var latLngRegex = /(-?\d{1,3}\.\d{3,})%2C(-?\d{1,3}\.\d{3,})/;
+        var latLngMatch = latLngRegex.exec(mapSrc);
         let lngLat = null
-        if (lon_regex.exec(mapSrc)){
-            lngLat = [lon_regex.exec(mapSrc)[1], lat_regex.exec(mapSrc)[1]]
+        if (latLngMatch){
+            lngLat = [latLngMatch[2], latLngMatch[1]]
         }
         
 
@@ -431,7 +415,7 @@ insert into biz.dentists_redo(url) select distinct src from dental_data.yelp whe
  */
 async function geocodePostFacto(){
     // get urls 
-    const urlsQuery = await db.query('select array_agg(profile_url) urls from dental_data.yelp where the_geom is null');
+    const urlsQuery = await db.query('select array_agg(profile_url) urls from dental_data.yelp where the_geom is null and no_geocode is null');
     let urls = urlsQuery['rows'][0]['urls'];
 
     // Start browser, open new page, prep use-agent 
@@ -457,6 +441,8 @@ async function geocodePostFacto(){
                 await db.query('ROLLBACK');
                 throw e
             }
+        }else {
+            db.query('update dental_data.yelp set no_geocode=1 where profile_url=$1', [url])
         }
     }
     await browser.close();
@@ -465,14 +451,17 @@ async function geocodePostFacto(){
 
 async function scrapeGeom(pageURL, page){
     const _waitForCss = 'img[alt="Map"]';
-    await ScrapeTools.prepPage(pageURL, page, scrapeGeom, _waitForCss, recaptchaCss, recaptchaSubmitCss);
+    const r = await ScrapeTools.prepPage(pageURL, page, scrapeGeom, _waitForCss, recaptchaCss, recaptchaSubmitCss);
+    if(r===-1){
+        return -1;
+    }
     return page.evaluate(()=>{ 
         var mapSrc = document.querySelectorAll('img[alt="Map"]')[0].getAttribute('srcset');
-        const lon_regex = /%2C(-?\d{1,3}\.\d{3,})&markers/; // '%2C' is hex encoding for comma
-        const lat_regex = /center=(-?\d{1,3}\.\d{3,})%2C/; // '%2C' is hex encoding for comma
+        var latLngRegex = /(-?\d{1,3}\.\d{3,})%2C(-?\d{1,3}\.\d{3,})/;
+        var latLngMatch = latLngRegex.exec(mapSrc);
         let lngLat = null
-        if (lon_regex.exec(mapSrc)){
-            lngLat = [lon_regex.exec(mapSrc)[1], lat_regex.exec(mapSrc)[1]]
+        if (latLngMatch){
+            lngLat = [latLngMatch[2], latLngMatch[1]]
         }
         return lngLat ? lngLat : -1;
     });

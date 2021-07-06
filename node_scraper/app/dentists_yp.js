@@ -44,7 +44,8 @@ var target = {};
 (async () => {
     /*
     // pull list of states to scrape 
-    var states_hitlist = await ScrapeTools.getTargetState('yp');
+     var states_hitlist = await ScrapeTools.getTargetState('yp');
+    // var states_hitlist = ['TX'];
     //console.log(`state list ${states_hitlist}`);
     while (states_hitlist.length >0) {
         await initial_scrape(states_hitlist.pop());
@@ -88,6 +89,7 @@ var target = {};
             var bizData = await scrapeYP(url, page) // scrape general search results 
             //console.log(`bizData: ${JSON.stringify(bizData)}`)
             if (bizData == -1 || !bizData || bizData.length == 0){  // if no search results 
+                await ScrapeTools.updateMetaStatus(-1, -1, target, 'yp');
                 console.log(`No search results for ${target['city']}-${target['state']}`)
                 break
             } 
@@ -105,7 +107,8 @@ var target = {};
                 // move on to the next page if there are relevant results, up to page 5
                 pageNum += 1; 
                 // scraper may not reach page 5 if there are no results on a page less than 5
-                nextPage = (relevantResults > 0 || pageNum <= 5) ? true : false;
+                // yellow pages may show the same repeated ads on every page, make sure results are > 7
+                nextPage = ((relevantResults > 0 && bizData.length > 7) || pageNum <= 5) ? true : false;
             }
         }
 
@@ -200,7 +203,7 @@ async function saveBizYP(payload, _target, url){
  */
  async function geocodePostFacto(){
     // get urls 
-    const urlsQuery = await db.query('select array_agg(profile_url) urls from dental_data.ypages where the_geom is null');
+    const urlsQuery = await db.query('select array_agg(profile_url) urls from dental_data.ypages where the_geom is null and no_geocode is null');
     let profileURLs = urlsQuery['rows'][0]['urls'];
 
     // Start browser, open new page, prep use-agent 
@@ -214,8 +217,9 @@ async function saveBizYP(payload, _target, url){
         
         if (url === -1){
             console.log(`************ unable to get DirectionURL for ${profileURL} ************`)    
+            db.query('update dental_data.ypages set no_geocode=1 where profile_url=$1', [profileURL])
             continue;
-        }
+        } 
 
         console.log(`************ scraping geom from ${url} ************`)
         let payload = await scrapeGeom(url, page, 'div#map img');
@@ -233,6 +237,8 @@ async function saveBizYP(payload, _target, url){
                 await db.query('ROLLBACK');
                 throw e
             }
+        } else {
+            db.query('update dental_data.ypages set no_geocode=1 where profile_url=$1', [profileURL])
         }
     }
     await browser.close();
@@ -251,14 +257,19 @@ async function getDirectionsURL(pageURL, page, waitForCss){
 }
 
 async function scrapeGeom(pageURL, page, waitForCss){
-    await ScrapeTools.prepPage(pageURL, page, scrapeGeom, waitForCss, recaptchaCss, recaptchaSubmitCss);
+    const r = await ScrapeTools.prepPage(pageURL, page, scrapeGeom, waitForCss, recaptchaCss, recaptchaSubmitCss);
+    if (r === -1){
+        return -1;
+    }
     return page.evaluate((_waitForCss)=>{ 
         var mapSrc = document.querySelector(_waitForCss).getAttribute('src');
-        let lon_regex = /%2C(-?\d{1,3}\.\d{3,})&zoom/; // '%2C' is hex encoding for comma
-        let lat_regex = /markers=(-?\d{1,3}\.\d{3,})%2C/; // '%2C' is hex encoding for comma
+        // let lon_regex = /%2C(-?\d{1,3}\.\d{3,})&zoom/; // '%2C' is hex encoding for comma
+        // let lat_regex = /markers=(-?\d{1,3}\.\d{3,})%2C/; // '%2C' is hex encoding for comma
+        let lngLatRegex = /(-?\d{1,3}\.\d{3,})%2C(-?\d{1,3}\.\d{3,})/
+        let lngLatMatch = lngLatRegex.exec(mapSrc);
         let lngLat = null
-        if (lon_regex.exec(mapSrc)){
-            lngLat = [lon_regex.exec(mapSrc)[1], lat_regex.exec(mapSrc)[1]]
+        if (lngLatMatch){
+            lngLat = [lngLatMatch[2], lngLatMatch[1]]
         }
         return lngLat ? lngLat : -1;
     }, waitForCss);

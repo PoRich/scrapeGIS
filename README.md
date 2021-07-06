@@ -5,8 +5,8 @@ A web sraping micro service
     1. set target['state'] variable; TODO - scrape all states 
     2. `$ node app/dentists_ada.js` from node_scraper root folder 
 2. YELP - IL, PA (202 no addr / 11,756 with address)
-3. YELLOW PAGES - IL, PA
-    a. stuck continually scraping the 5 pages of McCook, IL, McConnellsburg, PA
+3. YELLOW PAGES -
+    a. scrape directionsURL on first attempt
 4. GOOGLE MAPS [LATER]
 5. SECRETARY OF STATE [LATER]
 6. BUSINESS LICENSING DATABASE [LATER] - https://delpros.delaware.gov/OH_VerifyLicense
