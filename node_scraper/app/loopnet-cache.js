@@ -205,7 +205,8 @@ async function run(){
 
 
     // -------------------------- Scrape Results -------------------------- 
-    // await page.goto('https://www.loopnet.com/search/commercial-real-estate/chicago-il/for-sale')
+    const cachePrefix = 'http://webcache.googleusercontent.com/search?q=cache:'
+    await page.goto(`${cachePrefix}https://www.loopnet.com/search/commercial-real-estate/chicago-il/for-sale`)
     var totalPages = 1
     var currentPage = 1;
     var maxResultsPerPage = 20;
@@ -323,7 +324,9 @@ async function scrapeProfileCards(page, listing_type){
                 .map(a => {return {
                     id: a.dataset.id,
                     addr: `${[...a.getElementsByClassName('placard-carousel-pseudo')][0].title} ${a.getAttribute('gtm-listing-zip')}`, 
-                    href: `${[...a.getElementsByClassName('placard-carousel-pseudo')][0].href}`,
+                    href: [...a.getElementsByClassName('placard-carousel-pseudo')][0].href ?
+                        [...a.getElementsByClassName('placard-carousel-pseudo')][0].href : 
+                        [...a.getElementsByClassName('placard-carousel-pseudo')][0].getAttribute('ng-href'),
                     // spaceUse: a.getAttribute('gtm-listing-space-use'),
                     propertyType: a.getAttribute('gtm-listing-property-type-name'), 
                     listingType: a.getAttribute('gtm-listing-type-name'),
@@ -338,9 +341,21 @@ async function scrapeProfileCards(page, listing_type){
                     }});
             });
     }
+
+
     console.log(`profileCards ${JSON.stringify(profileCards)}`)
     profileCards.forEach(d => {
         if(d){
+            // Data processing ================================================
+            // Remove empty strings from factSummary
+            let cleanFacts = [] 
+            d.factSummary.forEach(e => {
+                if( e.trim() ){
+                    cleanFacts.push( e.trim() );
+                }
+            });
+            d.factSummary = cleanFacts;
+
             saveProfileCard(d, listing_type);
         }
     })

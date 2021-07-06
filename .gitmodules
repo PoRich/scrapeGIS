@@ -1,0 +1,3 @@
+[submodule "node_scraper/actor-page-analyzer"]
+	path = node_scraper/actor-page-analyzer
+	url = https://github.com/apify/actor-page-analyzer.git
