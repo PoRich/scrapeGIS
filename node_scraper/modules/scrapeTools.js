@@ -300,15 +300,7 @@ module.exports = {
         )
     },
     // returns sum of array of numbers 
-    sum(input){         elementsArr.forEach(e =>{
-        try {
-            console.log(`parseJsonLD e ${JSON.stringify(e)}`)
-            console.log(`parseJsonLD e.html ${JSON.stringify(e.innerHTML)}`)
-            result.push(JSON.parse(e.innerHTML));
-        } catch (err) {
-            console.error(`parseJsonLD error ${err}`);
-        }
-    })
+    sum(input){         
         if (toString.call(input) !== "[object Array]")
             return false;
                 
