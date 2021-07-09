@@ -419,16 +419,16 @@ async function geocodePostFacto(page){
         let payload = await scrapeGeom(url, page);
         console.log(`payload -> ${JSON.stringify(payload)}`);
         if (payload !== -1){
-            // save lnglat 
+            // save lnglat b
             try{
                 await db.query('BEGIN');
                 const queryText = 'update dental_data.yelp set \
                         (the_geom, last_update)=(ST_SetSRID(ST_MakePoint($1::float, $2::float), 4269), now()) where profile_url=$3 returning *';
                 const r = await db.query(queryText, [payload[0], payload[1], url]);
                 await db.query('COMMIT');
-                console.log(`Saved geocode for d_id: ${r['rows'][0]['d_id']}} -> dental_data.yelp`)
+                console.log(`geocodePostFacto: Saved geocode for d_id: ${r['rows'][0]['d_id']}} -> dental_data.yelp`)
             } catch (e) {
-                console.log(`failed to save geom: ${e}`)
+                console.log(`geocodePostFacto: Failed to save geom: ${e}`)
                 await db.query('ROLLBACK');
                 throw e
             }
@@ -437,10 +437,10 @@ async function geocodePostFacto(page){
                 await db.query('BEGIN');
                 const r = await db.query('update dental_data.yelp set no_geocode=1 where profile_url=$1 returning *', [url])
                 await db.query('COMMIT');
-                console.log(`Set no_geocde for d_id: ${r['rows'][0]['d_id']}} -> dental_data.yelp`)
+                console.log(`geocodePostFacto: Set no_geocde for: ${r['rows'][0]['profile_url']}} -> dental_data.yelp`)
             } catch(e){
                 await db.query('ROLLBACK');
-                console.log(`failed to save no_geocode on ${url}: ${e}`)
+                console.log(`geocodePostFacto: Failed to save no_geocode on ${url}: ${e}`)
                 throw e
             }
             

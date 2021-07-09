@@ -38,7 +38,7 @@ async function run() {
     */
 
     // Start browser, open new page, prep use-agent 
-    let browser = await puppeteerExtra.launch({headless: false});
+    let browser = await puppeteerExtra.launch({headless: true});
     let page = await browser.newPage();
     page = await ScrapeTools.preparePageForTests(page);
     await geocodePostFacto(page);
@@ -220,16 +220,28 @@ async function saveBizYP(payload, _target, url){
             try{
                 await db.query('BEGIN');
                 const queryText = 'update dental_data.ypages set \
-                        the_geom=ST_SetSRID(ST_MakePoint($1::float, $2::float), 4269) where profile_url=$3';
-                await db.query(queryText, [payload[0], payload[1], profileURL]);
+                        the_geom=ST_SetSRID(ST_MakePoint($1::float, $2::float), 4269) where profile_url=$3 returning *';
+                const r = await db.query(queryText, [payload[0], payload[1], profileURL]);
                 await db.query('COMMIT');
+                console.log(`geocodePostFacto: Saved geocode for d_id: ${r['rows'][0]['d_id']}} -> dental_data.yp`)
+
             } catch (e) {
-                console.log(`failed to save geom: ${e}`)
                 await db.query('ROLLBACK');
+                console.log(`geocodePostFacto: Failed to save geom to dental_data.yp: ${e}`)
                 throw e
             }
         } else {
-            db.query('update dental_data.ypages set no_geocode=1 where profile_url=$1', [profileURL])
+            try{
+                await db.query('BEGIN');
+                const r = await db.query('update dental_data.ypages set no_geocode=1 where profile_url=$1', [profileURL])
+                console.log(`geocodePostFacto: Set no_geocde for: ${profileURL} -> dental_data.yp`)
+                await db.query('COMMIT');
+            } catch(e){
+                await db.query('ROLLBACK');
+                console.log(`geocodePostFacto: Failed to save no_geocode on ${profileURL} to dental_data.yp: ${e}`)
+                throw e;
+            }
+
         }
     }
     return;
