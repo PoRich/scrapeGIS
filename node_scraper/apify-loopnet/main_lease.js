@@ -19,8 +19,8 @@ let loopCounter = 1;
 
 const listing_type = 'lease';
 var target = {
-    state: 'PA', // upper case 
-    city: 'Philadelphia' // case sensitive
+    state: 'IL', // upper case 
+    city: 'Chicago' // case sensitive
 }
 
 const proxyUrls = ScrapeTools.proxies.map( e => `http://${process.env.PROXY_USER}:${process.env.PROXY_PASSWORD}@${e}`)
@@ -113,13 +113,19 @@ async function saveBroker(broker){
             count +=1;
         }
         client.release(); 
-
-        //console.log(`Attempt ${count}: saveJsonLD (Broker) - agent1_id: ${agent1_id}`);     
+        
+        if (!agent1_id){
+            console.log(`ERROR saveJsonLD (saveBroker agent1_id is null) on 
+            select agent.get_a_id_person('${broker.name.trim()}', '${broker.jobTitle.trim()}', 'loopnet')
+            database response is: ${JSON.stringify(a1Query)}`)
+            throw 'null agent1_id';
+        } 
+        console.log(`Attempt ${count}: saveJsonLD (Broker) - agent1_id: ${agent1_id}`);     
         return agent1_id;
     } catch(e){
         await client.query('ROLLBACK;');
         client.release(); 
-        console.log(`ERROR saveJsonLD (saveBroker: ${broker.name} | db response ${JSON.stringify(a1Query)}) - error saving data: ${e}`)
+        console.log(`saveJsonLD (saveBroker: ${broker.name} | db response ${JSON.stringify(a1Query)}) - error saving data: ${e}`)
         throw e
     }
     
@@ -143,14 +149,19 @@ async function saveBrokerage(broker){
             count += 1;
         }
         client.release();
-        
-        //console.log(`Attempt: ${count}: saveJsonLD (Broker Organization) - agent2_id: ${agent2_id}`);        
+        if (!agent2_id){
+            console.log(`ERROR saveJsonLD (saveBrokerage agent2_id is null) on 
+            select agent.get_a_id_person('${broker.worksFor.name.trim()}', 'Commercial Real Estate Brokerage', 'loopnet')
+            database response is: ${JSON.stringify(a2Query)}`)
+            throw 'null agent1_id';
+        } 
+        console.log(`Attempt: ${count}: saveJsonLD (Broker Organization) - agent2_id: ${agent2_id}`);        
         return agent2_id;
         
     } catch(e){
         await client.query('ROLLBACK;');
         client.release();
-        console.log(`ERROR saveJsonLD (Broker Organization: ${broker.worksFor.name} | db result ${JSON.stringify(a2Query)}) - error saving data: ${e}`)
+        console.log(`saveJsonLD (Broker Organization: ${broker.worksFor.name} | db result ${JSON.stringify(a2Query)}) - error saving data: ${e}`)
         throw e
     }
     
@@ -163,7 +174,7 @@ async function saveAgentRelationship(agent1_id, agent2_id){
     let count = 1;
     try{
         while (!aAgent_id){
-            
+            //await db.query('BEGIN;');
             aaQuery = await db.query(
             'insert into agent.a_agent(agent1_id, relation, agent2_id, notes, last_update) \
             values ($1, $2, $3, $4, now()) \
@@ -171,15 +182,16 @@ async function saveAgentRelationship(agent1_id, agent2_id){
             do update set last_update= EXCLUDED.last_update returning aa_id', 
             [agent1_id, 'works for', agent2_id, 'per loopnet']);
             aAgent_id = aaQuery['rows'][0]['aa_id'];
-
-            //console.log(`Attempt ${count}: saveAgentRelationship (saveBroker) - aAgent_id: ${aAgent_id}`);        
+            //await db.query('COMMIT;');
+            // console.log(`Attempt ${count}: saveAgentRelationship (saveBroker) - aAgent_id: ${aAgent_id}`);        
             count +=1;
         }
         
         return aAgent_id;
     } catch(e){
-        
-        console.log(`ERROR saveJsonLD (Broker - Org Relation: agent1_id(${agent1_id}) <-> agent2_id(${agent2_id}) | 
+        // await db.query('ROLLBACK;');
+        // client.release();
+        console.log(`saveJsonLD (Broker - Org Relation: agent1_id(${agent1_id}) <-> agent2_id(${agent2_id}) | 
                     db response ${JSON.stringify(aaQuery)}) - error saving data: ${e}`)
         throw e
     }
@@ -187,13 +199,11 @@ async function saveAgentRelationship(agent1_id, agent2_id){
 
 
 async function saveJsonLD(d){
-    // keys: description, image, _avg_price, _prices, offeredBy, priceCurrency, 
-    // availableAtOrFrom, @type, price, url, name, category
-    
-    const loopnet_id = d._loopnet_id;
-    delete d._loopnet_id;
-
-    try{    
+    // keys: description, image, _avg_price, _prices, offeredBy, priceCurrency, availableAtOrFrom, @type, price, url, name, category
+    try{
+        const loopnet_id = d._loopnet_id;
+        delete d._loopnet_id;
+        
         const href = d.url || null; 
         delete d.url;
 
@@ -216,9 +226,6 @@ async function saveJsonLD(d){
         if(d._avg_price){
             price = d._avg_price;
             delete d._avg_price
-        } else if (d.price){
-            price = Number(d.price);
-            delete d.price;
         }
 
         const imgs = [d.image] || null;
@@ -237,7 +244,7 @@ async function saveJsonLD(d){
             description = d.description;
             delete d.description
         }
-
+        
         // Serialize broker, brokerage, add a_agent_ids
         if(d.offeredBy){ 
             // d.offeredBy is either an array of objects (more than 1 broker)-> use Array.from 
@@ -254,7 +261,7 @@ async function saveJsonLD(d){
                         if(broker.worksFor['@type'] === 'Organization'){
                             agent2_id = await saveBrokerage(broker);
                         } else{
-                            console.log(`NOTICE: broker doesn't work for organization [NOT SAVED]: ${broker.worksFor['@type']}`)
+                            console.log(`broker doesn't work for organization [NOT SAVED]: ${broker.worksFor['@type']}`)
                         }
                     }
 
@@ -266,7 +273,7 @@ async function saveJsonLD(d){
                         while (!aAgent_id){ // Save broker-brokerage relationship to agent.a_agent table 
                             aAgent_id = await saveAgentRelationship(agent1_id, agent2_id);
                             count +=1;
-                            // console.log(`Called saveAgentRelationship ${count} times - aAgent_id = ${aAgent_id}`)
+                            console.log(`Called saveAgentRelationship ${count} times - aAgent_id = ${aAgent_id}`)
                         }
 
                         if(aAgent_id){
@@ -298,13 +305,13 @@ async function saveJsonLD(d){
                                 // await db.query('COMMIT');
                                 listingBrokerUpdateCount +=1;
                             }
-                            // console.log(`300 - Attempt: ${listingBrokerUpdateCount} Updated loopnet_id: ${loopnet_id} to listing_broker: ${updatedField}`)
+                            console.log(`290 - Attempt: ${listingBrokerUpdateCount} Updated loopnet_id: ${loopnet_id} to listing_broker: ${updatedField}`)
                         }
                     } else { 
                         console.log(`NOTICE: NO BROKER RELATIONSHIP SAVED (one agent_id is missing) agent1_id: ${agent1_id} | agent2_id: ${agent2_id}`)
                     }
                 } else {
-                    console.log(`NOTICE: broker is not a person [NOT SAVED]: ${broker['@type']}`)
+                    console.log(`NOTE: broker is not a person [NOT SAVED]: ${broker['@type']}`)
                 }
             });
             
@@ -317,11 +324,11 @@ async function saveJsonLD(d){
                             ($1, $2, $3, $4, $5, $6, now()) where loopnet_id=$7 and listing_type=$8 returning *'; 
         const queryResult =  await db.query(queryText, [d, href, price, category, imgs, description, loopnet_id, listing_type])
         await db.query('COMMIT');
-        // console.log(`saveJsonLD db result: ${JSON.stringify(queryResult)}`);
-        console.log(`saveJsonLD saved loopnet_id: ${JSON.stringify(queryResult['rows'][0]['loopnet_id'])} - ${JSON.stringify(queryResult['rows'][0]['raw_jsonld']['streetAddress'])}`);
+        
+        // console.log(`saveJsonLD saved loopnet_id: ${JSON.stringify(queryResult['rows'][0]['loopnet_id'])} - ${JSON.stringify(queryResult['rows'][0]['raw_jsonld']['streetAddress'])}`);
     } catch (e) {
         await db.query('ROLLBACK');
-        console.log(`ERROR (saveJsonLD error saving loopnet_id ${loopnet_id}): ${e}`)
+        console.log(`(saveJsonLD error saving loopnet_id ${loopnet_id}): ${e}`)
         throw e
     }
 }
@@ -351,22 +358,15 @@ async function saveArticles(d){
             delete d.briefDesc;
         }
 
-        let acreLot = null;
-        if(d._acreLot){
-            acreLot = d._acreLot;
-            delete d._acreLot;
-        }
-        
-
-        const queryText = 'update hsing_data.loopnet set (addr, imgs, blding_sqft, lot_acre, exec_sum, raw_article, date_scraped) = \
-                        ($1, $2, $3, $4, $5, $6, now()) where loopnet_id=$7 and listing_type=$8 returning *'; 
+        const queryText = 'update hsing_data.loopnet set (addr, imgs, blding_sqft, exec_sum, raw_article, date_scraped) = \
+                        ($1, $2, $3, $4, $5, now()) where loopnet_id=$6 and listing_type=$7 returning *'; 
         await db.query('BEGIN');
-        const queryResult =  await db.query(queryText, [addr, imgs, sqft, acreLot, briefDesc, d, loopnet_id, listing_type])
+        const queryResult =  await db.query(queryText, [addr, imgs, sqft, briefDesc, d, loopnet_id, listing_type])
         await db.query('COMMIT');
-        console.log(`saveArticles - saved loopnet_id: ${JSON.stringify(queryResult['rows'][0]['loopnet_id'])} - ${JSON.stringify(queryResult['rows'][0]['addr'])}`);
+        // console.log(`saveArticles - saved loopnet_id: ${JSON.stringify(queryResult['rows'][0]['loopnet_id'])} - ${JSON.stringify(queryResult['rows'][0]['raw_article']['addr'])}`);
     } catch (e) {
         await db.query('ROLLBACK');
-        console.log(`ERROR (saveArticles loopnet_id: ${loopnet_id}) error: ${e}`)
+        console.log(`(saveArticles loopnet_id: ${loopnet_id}) error: ${e}`)
         throw e
     }
 }
@@ -376,7 +376,7 @@ Apify.main(async () => {
     // First we create the request queue instance.
     const requestQueue = await Apify.openRequestQueue();
     // And then we add a request to it.
-    await requestQueue.addRequest({ url: `https://www.loopnet.com/search/commercial-real-estate/${target.city.toLowerCase()}-${target.state.toLowerCase()}/for-${listing_type}/` });
+    await requestQueue.addRequest({ url: `https://www.loopnet.com/search/commercial-real-estate/${target.city.toLowerCase()}-${target.state.toLowerCase()}/for-lease/` });
     
     const proxyConfiguration = await Apify.createProxyConfiguration({ proxyUrls: proxyUrls, });
     const proxyInfo = proxyConfiguration.newProxyInfo();
@@ -405,7 +405,7 @@ Apify.main(async () => {
         },
         handlePageFunction: async ({request, page, session, proxyInfo, listing_type}) => {
             // Block Resources 
-            page = await ScrapeTools.blockResources(page, ['stylesheet, image, media, font, script, other']);
+            //page = await ScrapeTools.blockResources(page, ['stylesheet, image, media, font, script, other']);
 
             // await runTests(page);
 
@@ -485,7 +485,7 @@ Apify.main(async () => {
                         e._loopnet_id = loopnet_id_regex.exec(e.url)[1] || null;
                         let rentMatch = null;
                         // Extract and calculate average rental rate
-                        if (e.price && listing_type == 'lease'){
+                        if (e.price){
                             rentMatch = rentRegex.exec(e.price) || rentRegex.exec(e.description);
                             if (e.price.includes('-')){
                                 e._prices = [Number(rentMatch[1]), Number(rentMatch[2])];
@@ -493,8 +493,17 @@ Apify.main(async () => {
                                 e._prices = [Number(rentMatch[1])];
                             }
                             e._avg_price = ScrapeTools.sum(e._prices) / e._prices.length;
-                        } 
-                        
+                        }
+                        /*
+                        // Extract sqft 
+                        let sqftMatch =  null
+                        if (e.description){
+                            sqftMatch = sqftRegex.exec(e.description); 
+                            if (sqftMatch){
+                                e._sqft = Number(sqftMatch[1].replace(',',''));
+                            }
+                        }
+                        */
                     });
                     // console.log(`jsonld ${JSON.stringify(searchResultsJsonLD, null,'\t')}`);
                 }
@@ -503,10 +512,10 @@ Apify.main(async () => {
                 
 
                 // Scrape profile cards 
-                const articles = await page.$$eval('article', ($articles) => {
+                const articles = await page.$$eval('article', $articles => {
                     const scrapedCards = [];
                     $articles.forEach(($a) =>{
-                        let scrape = {
+                        scrapedCards.push({
                             _loopnet_id: $a.dataset.id, 
                             addr: `${[...$a.getElementsByClassName('placard-carousel-pseudo')][0].title} ${$a.getAttribute('gtm-listing-zip')}`,
                             images: Array.from($a.getElementsByClassName('slide')).map(d => d.children[0].children[0].content), 
@@ -515,32 +524,17 @@ Apify.main(async () => {
                                 ([...$a.getElementsByClassName('data-points-2c')][0] ? 
                                 [...$a.getElementsByClassName('data-points-2c')][0].innerText.split('\n'): null),
                             briefDesc: [...$a.getElementsByClassName('data-points-b')][0] ?
-                                [...$a.getElementsByClassName('data-points-b')][0].innerText : null
-                        }
-
-                        let banner = [...$a.getElementsByClassName('right-h4')][0] ? 
-                                    [...$a.getElementsByClassName('right-h4')][0].innerText : null;
-                        if (banner){
-                            scrape.banner = banner;
-                        }
-
-                        let oz = $a.getElementsByClassName('tag tag-opportunity-zone')[0] ? true : false;
-                        if(oz){
-                            scrape.opportunity_zone = oz;
-                        }                
-
-                        scrapedCards.push(scrape);
+                                [...$a.getElementsByClassName('data-points-b')][0].innerText : null,
+                        });
                     })
                     return scrapedCards;
-                })     
+                }, listing_type)     
 
                 // Extract yearBuilt, starRating;
                 const yrRegex = /Built\sin\s(\d{4,4})/;
                 const starRegex = /(\d{1,1})\sStar/;
                 const sqftRegexArticle = /(\d{0,3},?\d{1,3})?(\s-\s)?(\d{0,3},?\d{1,3})\sSF(?!\/YR)/;
-                const capRateRegex = /(\d{1,3}\.?\d{0,2})\%\sCap\sRate/;
-                const acreLotRegex = /((\d{1,3}\,)?\d{0,3}\.?\d{0,2})\sAC\sLot/;
-                // TODO - for-sale scrape _cap_rate, _AC 
+                // const rentRegexArticle = /\$(\d{1,}\.\d{2,2})[\s\-\$]*(\d{1,}\.\d{2,2})?\s\SF\/YR/; // $35.00 - $37.00 SF/Yr
                 articles.forEach(e =>{
                     // listing_type=LEASE [year_built, stars from fact_summary]
                     // Extract year_built 
@@ -548,24 +542,13 @@ Apify.main(async () => {
                         let yrMatch = null;
                         let starMatch = null;
                         let sqftMatch = null;
-                        let capRateMatch = null;
-                        let acreLotMatch = null;
+                        // let rentMatch = null;
                         
                         e.factSummary.forEach(d => {
                             yrMatch = yrRegex.exec(d);
                             starMatch = starRegex.exec(d);
-                            sqftMatch = sqftRegexArticle.exec(d);                            
-                            capRateMatch = capRateRegex.exec(d);
-                            acreLotMatch = acreLotRegex.exec(d);
-                            
-                            if(capRateMatch){
-                                e._capRate = Number(capRateMatch[1]);
-                            }
-
-                            if(acreLotMatch){
-                                e._acreLot = Number(acreLotMatch[1]);
-                            }
-
+                            sqftMatch = sqftRegexArticle.exec(d);
+                            // rentMatch = rentRegexArticle.exec(d);
                             if(yrMatch){
                                 e._yrBuilt = Number(yrMatch[1]);
                             } 
@@ -580,7 +563,16 @@ Apify.main(async () => {
                                     e._sqft = [Number(sqftMatch[0].replace(',','').replace(' SF','') )];
                                 }
                             }
-         
+                            /**
+                            if(rentMatch){
+                                if (d.includes('-')){
+                                    e._prices = [Number(rentMatch[1]), Number(rentMatch[2])];
+                                } else {
+                                    e._prices = [Number(rentMatch[1])];
+                                }
+                                e._avg_price = ScrapeTools.sum(e._prices) / e._prices.length;
+                            }  
+                            */
                         })
                     }
                 })
@@ -631,9 +623,10 @@ Apify.main(async () => {
 
 
 /**
-https://docs.apify.com/web-scraping-101/web-scraping-techniques
-
-delete from hsing_data.loopnet where target_plcidfp='4260000';
-select * from hsing_data.loopnet where target_plcidfp='4260000' and raw_jsonld is not null;
-
+ * https://docs.apify.com/web-scraping-101/web-scraping-techniques
+ * 
+ * 
+ * for loopnet, yelp PROFILE pages 
+ * var jsonLD = $('script[type="application/ld+json"]');
+ * return JSON.parse(jsonLD.innerHTML
  */
