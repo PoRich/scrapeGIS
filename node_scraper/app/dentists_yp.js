@@ -194,7 +194,9 @@ async function saveBizYP(payload, _target, url){
  */
  async function geocodePostFacto(page){
     // get urls 
-    const urlsQuery = await db.query('select array_agg(profile_url) urls from dental_data.ypages where the_geom is null and no_geocode is null');
+    const urlsQuery = await db.query('with profile_urls as (select profile_url from dental_data.ypages \
+        where the_geom is null and no_geocode is null order by 1 asc) \
+        select array_agg(profile_url) urls from profile_urls'); // other instance is desc order 
     let profileURLs = urlsQuery['rows'][0]['urls'];
 
     if(!profileURLs){
@@ -202,47 +204,51 @@ async function saveBizYP(payload, _target, url){
         return;
     }
 
+    let idx = 0;
     while (profileURLs.length > 0){
-        let profileURL = profileURLs.pop(); 
-        let url = await getDirectionsURL(profileURL, page, 'a.directions');
-        
-        if (url === -1){
-            console.log(`************ unable to get DirectionURL for ${profileURL} ************`)    
-            db.query('update dental_data.ypages set no_geocode=1 where profile_url=$1', [profileURL])
-            continue;
-        } 
+        if (idx < (profileURLs.length/2) ){ // scrape half desc another instance scrapes half ascending
+            let profileURL = profileURLs.pop(); 
+            let url = await getDirectionsURL(profileURL, page, 'a.directions');
+            
+            if (url === -1){
+                console.log(`************ unable to get DirectionURL for ${profileURL} ************`)    
+                db.query('update dental_data.ypages set no_geocode=1 where profile_url=$1', [profileURL])
+                continue;
+            } 
 
-        console.log(`************ scraping geom from ${url} ************`)
-        let payload = await scrapeGeom(url, page, 'div#map img');
-        console.log(`payload -> ${JSON.stringify(payload)}`);
-        if (payload !== -1){
-            // save lnglat 
-            try{
-                await db.query('BEGIN');
-                const queryText = 'update dental_data.ypages set \
-                        the_geom=ST_SetSRID(ST_MakePoint($1::float, $2::float), 4269) where profile_url=$3 returning *';
-                const r = await db.query(queryText, [payload[0], payload[1], profileURL]);
-                await db.query('COMMIT');
-                console.log(`geocodePostFacto: Saved geocode for d_id: ${r['rows'][0]['d_id']}} -> dental_data.yp`)
+            console.log(`************ idx ${idx} scraping geom from ${url} ************`)
+            let payload = await scrapeGeom(url, page, 'div#map img');
+            console.log(`payload -> ${JSON.stringify(payload)}`);
+            if (payload !== -1){
+                // save lnglat 
+                try{
+                    await db.query('BEGIN');
+                    const queryText = 'update dental_data.ypages set \
+                            the_geom=ST_SetSRID(ST_MakePoint($1::float, $2::float), 4269) where profile_url=$3 returning *';
+                    const r = await db.query(queryText, [payload[0], payload[1], profileURL]);
+                    await db.query('COMMIT');
+                    console.log(`geocodePostFacto: Saved geocode for d_id: ${r['rows'][0]['d_id']}} -> dental_data.yp`)
 
-            } catch (e) {
-                await db.query('ROLLBACK');
-                console.log(`geocodePostFacto: Failed to save geom to dental_data.yp: ${e}`)
-                throw e
+                } catch (e) {
+                    await db.query('ROLLBACK');
+                    console.log(`geocodePostFacto: Failed to save geom to dental_data.yp: ${e}`)
+                    throw e
+                }
+            } else {
+                try{
+                    await db.query('BEGIN');
+                    const r = await db.query('update dental_data.ypages set no_geocode=1 where profile_url=$1', [profileURL])
+                    console.log(`geocodePostFacto: Set no_geocde for: ${profileURL} -> dental_data.yp`)
+                    await db.query('COMMIT');
+                } catch(e){
+                    await db.query('ROLLBACK');
+                    console.log(`geocodePostFacto: Failed to save no_geocode on ${profileURL} to dental_data.yp: ${e}`)
+                    throw e;
+                }
+
             }
-        } else {
-            try{
-                await db.query('BEGIN');
-                const r = await db.query('update dental_data.ypages set no_geocode=1 where profile_url=$1', [profileURL])
-                console.log(`geocodePostFacto: Set no_geocde for: ${profileURL} -> dental_data.yp`)
-                await db.query('COMMIT');
-            } catch(e){
-                await db.query('ROLLBACK');
-                console.log(`geocodePostFacto: Failed to save no_geocode on ${profileURL} to dental_data.yp: ${e}`)
-                throw e;
-            }
-
         }
+        idx +=1; 
     }
     return;
 }
