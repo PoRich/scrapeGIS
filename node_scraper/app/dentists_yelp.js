@@ -407,7 +407,7 @@ insert into biz.dentists_redo(url) select distinct src from dental_data.yelp whe
 async function geocodePostFacto(page){
     // get urls 
     const urlsQuery = await db.query('with profile_urls as (select profile_url from dental_data.yelp \
-        where the_geom is null and no_geocode is null order by 1 desc) \
+        where the_geom is null and no_geocode is null order by 1 asc) \
         select array_agg(profile_url) urls from profile_urls'); // other instance is desc order 
      let urls = urlsQuery['rows'][0]['urls'];
     if (!urls){
