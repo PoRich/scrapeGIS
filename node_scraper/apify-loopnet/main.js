@@ -215,10 +215,10 @@ async function saveJsonLD(d){
         let price = null;
         if(d._avg_price){
             price = d._avg_price;
-            delete d._avg_price
+            // delete d._avg_price
         } else if (d.price){
             price = Number(d.price);
-            delete d.price;
+            // delete d.price;
         }
 
         const imgs = [d.image] || null;
@@ -317,7 +317,7 @@ async function saveJsonLD(d){
                             ($1, $2, $3, $4, $5, $6, now()) where loopnet_id=$7 and listing_type=$8 returning *'; 
         const queryResult =  await db.query(queryText, [d, href, price, category, imgs, description, loopnet_id, listing_type])
         await db.query('COMMIT');
-        // console.log(`saveJsonLD db result: ${JSON.stringify(queryResult)}`);
+        console.log(`saveJsonLD db result: ${JSON.stringify(queryResult['rows'][0], null, '\t')}`);
         console.log(`saveJsonLD saved loopnet_id: ${JSON.stringify(queryResult['rows'][0]['loopnet_id'])} - ${JSON.stringify(queryResult['rows'][0]['raw_jsonld']['streetAddress'])}`);
     } catch (e) {
         await db.query('ROLLBACK');
@@ -339,17 +339,20 @@ async function saveArticles(d){
             sqft = d._sqft[l];
         }
         
+        let capRate = null;
+        if (d._capRate){
+            capRate = Number(d._capRate);
+            delete d._capRate
+        }
+        
         let addr = d.addr;
         delete d.addr;
 
         let imgs = d.images;
         delete d.images;
 
-        let briefDesc = null;
-        if (d.briefDesc){
-            briefDesc = d.briefDesc
-            delete d.briefDesc;
-        }
+        let briefDesc = d.briefDesc
+        delete d.briefDesc;
 
         let acreLot = null;
         if(d._acreLot){
@@ -358,10 +361,10 @@ async function saveArticles(d){
         }
         
 
-        const queryText = 'update hsing_data.loopnet set (addr, imgs, blding_sqft, lot_acre, exec_sum, raw_article, date_scraped) = \
-                        ($1, $2, $3, $4, $5, $6, now()) where loopnet_id=$7 and listing_type=$8 returning *'; 
+        const queryText = 'update hsing_data.loopnet set (addr, imgs, blding_sqft, lot_acre, exec_sum, raw_article, cap_rate, date_scraped) = \
+                        ($1, $2, $3, $4, $5, $6, $7, now()) where loopnet_id=$8 and listing_type=$9 returning *'; 
         await db.query('BEGIN');
-        const queryResult =  await db.query(queryText, [addr, imgs, sqft, acreLot, briefDesc, d, loopnet_id, listing_type])
+        const queryResult =  await db.query(queryText, [addr, imgs, sqft, acreLot, briefDesc, d, capRate, loopnet_id, listing_type])
         await db.query('COMMIT');
         console.log(`saveArticles - saved loopnet_id: ${JSON.stringify(queryResult['rows'][0]['loopnet_id'])} - ${JSON.stringify(queryResult['rows'][0]['addr'])}`);
     } catch (e) {
@@ -485,7 +488,7 @@ Apify.main(async () => {
                         e._loopnet_id = loopnet_id_regex.exec(e.url)[1] || null;
                         let rentMatch = null;
                         // Extract and calculate average rental rate
-                        if (e.price && listing_type == 'lease'){
+                        if (e.price){
                             rentMatch = rentRegex.exec(e.price) || rentRegex.exec(e.description);
                             if (e.price.includes('-')){
                                 e._prices = [Number(rentMatch[1]), Number(rentMatch[2])];
