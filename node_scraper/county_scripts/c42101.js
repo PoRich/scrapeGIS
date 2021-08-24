@@ -1,3 +1,7 @@
+/** From node_scraper directory run
+ *  $ node county_scripts/c42101.js with the appropriate function calls below  
+*/
+
 if (process.env.NODE_ENV !== 'production') {
     require('dotenv').config();}
 const Shp2psql= require('../app/shp2psql.js');
@@ -105,8 +109,6 @@ for(var k in archive_shp_urls) {
         .then(addCompleted);   
     }
 
-
-
 (async function() {
     // get all archived data  
     let completed = []; 
@@ -119,12 +121,8 @@ for(var k in archive_shp_urls) {
             console.log(completed)
         }
     }
-
 })();
  
-
-
-
 (async function() {
     var records = await zip2psql(COUNTY_CODE, desc, target_url)
     console.log(`${records} records saved from ${desc}`)
