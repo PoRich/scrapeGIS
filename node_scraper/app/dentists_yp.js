@@ -194,7 +194,9 @@ async function saveBizYP(payload, _target, url){
  */
  async function geocodePostFacto(page){
     // get urls 
-    const urlsQuery = await db.query('select array_agg(profile_url) urls from dental_data.ypages where the_geom is null and no_geocode is null');
+    const urlsQuery = await db.query('with profile_urls as (select profile_url from dental_data.ypages \
+        where the_geom is null and no_geocode is null order by 1 asc) \
+        select array_agg(profile_url) urls from profile_urls'); // other instance is desc order 
     let profileURLs = urlsQuery['rows'][0]['urls'];
 
     if(!profileURLs){

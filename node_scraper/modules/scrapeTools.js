@@ -232,8 +232,8 @@ module.exports = {
             yDistance: - rand_num(0,100),
             })
 
-        try{ // Wait 10 seconds or target css selector to load
-            await page.waitForSelector(waitForCss, {timeout: 50002});
+        try{ // Wait 5 seconds or target css selector to load
+            await page.waitForSelector(waitForCss, {timeout: 5002});
             return ;
         } catch (e) {
             console.log(`No results on page: ${e} | Looking for Recaptcha ... `)

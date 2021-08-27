@@ -5738,9 +5738,15 @@
          "dev": true
       },
       "tar": {
+<<<<<<< HEAD
          "version": "6.1.10",
          "resolved": "https://registry.npmjs.org/tar/-/tar-6.1.10.tgz",
          "integrity": "sha512-kvvfiVvjGMxeUNB6MyYv5z7vhfFRwbwCXJAeL0/lnbrttBVqcMOnpHUf0X42LrPMR8mMpgapkJMchFH4FSHzNA==",
+=======
+         "version": "6.1.0",
+         "resolved": "https://registry.npmjs.org/tar/-/tar-6.1.0.tgz",
+         "integrity": "sha512-DUCttfhsnLCjwoDoFcI+B2iJgYa93vBnDUATYEeRx6sntCTdN01VnqsIuTlALXla/LWooNg0yEGeB+Y8WdFxGA==",
+>>>>>>> 516201e5d6046263f5f09bf8edbe40825a465dbc
          "requires": {
             "chownr": "^2.0.0",
             "fs-minipass": "^2.0.0",
