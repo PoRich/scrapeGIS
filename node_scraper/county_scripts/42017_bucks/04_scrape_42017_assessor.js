@@ -30,70 +30,81 @@ const recaptchaCss = '.g-recaptcha';
 const recaptchaSubmitCss = '.ybtn.ybtn--primary';
 
 
-
+    
 // =================== RUN FUNCTION =================== 
 // scrapes parcel numbers that match the re_pattern (to allow multi-threading)
-async function run(re_pattern){
-    var parcel_numbers = ['foobar'];
-    while (parcel_numbers.length > 0) {
-        // Get all parcel numbers in Bucks County
-        var parcel_num_query = await db.query('select array(select parcel_num from pcl_data.c42107_gis except select parcel_num from pcl_data.c42107_assessor as a);'); 
-        parcel_numbers = parcel_num_query['rows'][0]['array'];
+async function run(){
+    
+    // Start browser, prep use-agent 
+    const args = ['--headless=false'];
+    //const args = ['--proxy-server=socks5://127.0.0.1:9050'];
+    console.log(`Launching browser...`);
+    const browser = await puppeteer.launch({ args }); 
+    // let [page] = await browser.pages(); //use existing tab 
         
-        parcel_numbers = parcel_numbers.filter(x => re_pattern.test(x)) // match regex pattern
-        // console.log(`parcel_numbers ${JSON.stringify(parcel_numbers)}`);
+        /**
+        // check if Tor is running 
+        await page.goto('https://check.torproject.org/');
+        const isUsingTor = await page.$eval('body', el =>
+            el.innerHTML.includes('Congratulations. This browser is configured to use Tor')
+        );
 
-        // Start browser, prep use-agent 
-            //const args = ['--proxy-server=socks5://127.0.0.1:9050'];
-        const args = ['--headless=true'];
-        await ScrapeTools.sleep(ScrapeTools.rand_num(700,1000));
-        // console.log(`Launching browser | parcel_numbers length ${parcel_numbers.length}...`);
-        console.log(`Launching browser ${re_pattern} | parcel_numbers length ${parcel_numbers.length}...`);
-        const browser = await puppeteer.launch({ args });
-        let [page] = await browser.pages();
-            /**
-            // check if Tor is running 
-            await page.goto('https://check.torproject.org/');
-            const isUsingTor = await page.$eval('body', el =>
-                el.innerHTML.includes('Congratulations. This browser is configured to use Tor')
-            );
+        if (!isUsingTor){
+            console.log(colors.red.bold('Not using Tor. Closing... '));
+            return await browser.close();
+        }
+        console.log(colors.green.bold('Using Tor. Contuing... '))
+        */
 
-            if (!isUsingTor){
-                console.log(colors.red.bold('Not using Tor. Closing... '));
-                return await browser.close();
-            }
-            console.log(colors.green.bold('Using Tor. Contuing... '))
-            */
+    // Launch multiple tabs each assigned a batch of parcel_numbers (based on regexp patterns) 
+    var re_start = 40; // increment this by 10 for each run of the script 
+    for (i=re_start; i<(re_start+10); i++){ // run 10 tabs/pages at once 
+        let _re_string = i < 10 ? `0${i}` : `${i}`; // number -> string (add leading zero if < 10)
+        let re = new RegExp('^'+ _re_string, 'i'); // string -> regex pattern
+        scrape_batch(re, browser); // function call 
+    }
+};
+
+async function scrape_batch(re_pattern, browser){
+    var parcel_numbers = ['foobar']; // placeholder to start while loop 
+    while (parcel_numbers.length > 0) {
+        await ScrapeTools.sleep(ScrapeTools.rand_num(1000,3000));
+        var page = await browser.newPage();
+        console.log(`Launching new browser tab ${re_pattern} | parcel_numbers length ${parcel_numbers.length}...`);    
         page = await ScrapeTools.preparePageForTests(page);
         page = await ScrapeTools.blockResources(page, ['font', 'media', 'image', 'other']);
         await page.exposeFunction('zipObject', ScrapeTools.zipObject); // required for getTableData function
+    
+        // Get all parcel numbers in Bucks County, filter based on assigned regex pattern
+        var parcel_num_query = await db.query('select array(select parcel_num from pcl_data.c42107_gis except select parcel_num from pcl_data.c42107_assessor as a);'); 
+        parcel_numbers = parcel_num_query['rows'][0]['array'];
+        parcel_numbers = parcel_numbers.filter(x => re_pattern.test(x)) // match regex pattern
+        // console.log(`parcel_numbers ${JSON.stringify(parcel_numbers)}`);
         
-        var blockedRequest = false;
-        while (blockedRequest === false) {
-            
+        while (true){ // break statement in catch error logic; 
             let parcel_number = parcel_numbers.pop();
             var p = await scrape_bucks_assessor(parcel_number, page);
-
+            
+            // save payload 
             var r = await db.query(`INSERT INTO pcl_data.c42107_assessor(parcel_num, raw_data) \
                 VALUES ($1, $2::JSONB) ON CONFLICT (parcel_num) 
                 DO UPDATE set raw_data = EXCLUDED.raw_data
                 RETURNING parcel_num`, [parcel_number, p]);
 
-            if (p['parcel'] === null){
+            if (p['parcel'] === null){ // if API is blocked
                 console.log(`Request Blocked on Parcel Number ${parcel_number}. Payload is null, restarting browser... `);
                 // await page.screenshot({path: `./screenshots/bucks_${ScrapeTools.getDateTime()}_${parcel_number}_null.png`, fullPage: true});
-                blockedRequest = true
-                await browser.close();
+                await page.close();
                 break;
             }
-            else {
-                // console.log(`${parcel_number} Payload - ${JSON.stringify(p)}`);
-                console.log(`Saved Bucks County: ${p['parcel'] !== null} - Parcel Number: ${JSON.stringify(r['rows'][0]['parcel_num'], null, '\t')}`)
-                await ScrapeTools.sleep(ScrapeTools.rand_num(100,1000));
-            }
+            
+            // console.log(`${parcel_number} Payload - ${JSON.stringify(p)}`);     
+            console.log(`Saved Bucks County: ${p['parcel'] !== null} - Parcel Number: ${JSON.stringify(r['rows'][0]['parcel_num'], null, '\t')}`)
+            await ScrapeTools.sleep(ScrapeTools.rand_num(100,1000));
         }
-    }    
-};
+    }
+    return 0; // successfully processed all parcel_numbers
+}
 
 async function scrape_bucks_assessor(pcl_num, page){
     // Create and navigate to new page 
@@ -146,15 +157,9 @@ async function scrape_bucks_assessor(pcl_num, page){
         _p['source'] = url;
         return _p;
     } catch(e){
-        await page.screenshot({path: `./screenshots/bucks_${ScrapeTools.getDateTime()}_${parcel_number}_request_err.png`, fullPage: true});
+        // await page.screenshot({path: `./screenshots/bucks_${ScrapeTools.getDateTime()}_${pcl_num}_request_err.png`, fullPage: true});
         console.log(`error scraping page ${e}`)
     }
 }
 
-// Call function multiple times with different regexp patterns 
-var re_start = 30; // increment this by 10 for each run of the script 
-for (i=re_start; i<(re_start+10); i++){ // run 10 threads at once 
-    let _re_string = i < 10 ? `0${i}` : `${i}`; // number -> string (add leading zero if < 10)
-    let re = new RegExp('^'+ _re_string, 'i'); // string -> regex pattern
-    run(re); // function call 
-}
+run();
