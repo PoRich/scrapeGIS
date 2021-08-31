@@ -1,19 +1,33 @@
 const fetch = require('node-fetch');
 const fs = require('fs');
-const scrapeTools = require('../../modules/scrapeTools');
+// const scrapeTools = require('../../modules/scrapeTools');
 const exec = require('child_process').exec;
 const format = require('pg-format');
 require('dotenv').config();
 
-var lower = 0; 
 var incr = 2000;
-var upper = lower + incr;  // API will not return more than 2000 records
+var upper = 0 + incr;  // API will not return more than 2000 records
 const STAGING_FOLDER = '/Users/Rich/Downloads/scrape_temp'
 var tableName = 'c42107_gis';
 
-
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function checkStatus(res) {
+  if (res.ok) { // res.status >= 200 && res.status < 300
+      return res;
+  } else {
+      throw MyCustomError(res.statusText);
+  }
+}
+
+async function dl_bucks_county(_upper){
+  var url = `https://services3.arcgis.com/SP47Tddf7RK32lBU/arcgis/rest/services/ParcelsMay2019/FeatureServer/0/query?f=geojson&where=OBJECTID%20%3E%20${upper-2000}%20AND%20OBJECTID%20%3C%20${upper}%20&returnGeometry=true&spatialRel=esriSpatialRelIntersects&outFields=*&outSR=102100&quantizationParameters=\{%22mode%22:%22edit%22\}`;
+  const res = await fetch(url);  
+  var DATA_DIR = `${STAGING_FOLDER}/c42017_gis_${_upper}.geojson`;
+  const dest = fs.createWriteStream(DATA_DIR); 
+  await res.body.pipe(dest);
 }
 
 // download payload 
@@ -21,57 +35,25 @@ function sleep(ms) {
   exec(`mkdir ${STAGING_FOLDER}`);
   exec(`cd ${STAGING_FOLDER}`);
 
-  function checkStatus(res) {
-    if (res.ok) { // res.status >= 200 && res.status < 300
-        return res;
-    } else {
-        throw MyCustomError(res.statusText);
-    }
-}
-
-  while (upper <= 600000) {
-    var DATA_DIR = `${STAGING_FOLDER}/c42017_gis_${upper}.geojson`;
-/**
-    var url = `https://services3.arcgis.com/SP47Tddf7RK32lBU/arcgis/rest/services/ParcelsMay2019/FeatureServer/0/query?f=geojson&where=OBJECTID%20%3E%20${lower}%20AND%20OBJECTID%20%3C%20${upper}%20&returnGeometry=true&spatialRel=esriSpatialRelIntersects&outFields=*&outSR=102100&quantizationParameters=\{%22mode%22:%22edit%22\}`;
-    
-    fetch(url)
-      .then(checkStatus)
-      .then(res => {
-      const dest = fs.createWriteStream(DATA_DIR); 
-      res.body.pipe(dest);
-    });
-*/
-    let fmt_cmd = format('ogr2ogr -f "PostgreSQL" PG:"host=%1$s port=5432 user=%3$s password=%4$s dbname=%5$s" %6$I -s_srs EPSG:3857 -t_srs EPSG:3857 -nln %7$s.%8$s -lco GEOMETRY_NAME=the_geom;',
-                `${process.env.PGHOST}`, `${process.env.PGPORT}`, `${process.env.PGUSER}`, `${process.env.PGPASSWORD}`, `${process.env.PGDATABASE}`, `${DATA_DIR}`, `${process.env.PGSCHEMA}`, `${tableName}`)
-    // console.log(`fmt_cmd ${fmt_cmd}`);
-
-    exec(fmt_cmd, (err, stdout, stderr) => {
-      if(err){
-          console.log(`error ogr2ogr ${err.message}`);
-          return;
-      }
-      console.log(stdout || stderr);
-      return;
-    });
-
+  while (upper <= 600000) {   
+    await dl_bucks_county(upper)
     // Increment 
-    await sleep(30);
+    await sleep(10);
     console.log(`API hit ${upper}`)
-    lower += incr;
     upper += incr;
-    
   }
 })();
 
 /*
-
-(async ()=>{
-  const payload = await fetch(url);
-  const data = await payload.json();
-  console.log(JSON.stringify(data, null, '\t'))
-})();
-
-
+OBJECTID IS MULTIPOLYGON (VS POLYGON)
+8726
+9408
+9966
+101824
+103090
+103574
+103806
+104480
 
 > Object.keys(r);
 [

@@ -288,9 +288,22 @@ module.exports = {
      */
     zipObject(labelsArray, dataArray){
         var p = {};
-        for (var i=0; i<labelsArray.length; ++i){
-            const k = labelsArray[i]
-            p[k] = dataArray[i];
+        var label_len = labelsArray.length;
+        var data_len = dataArray.length;
+        if (label_len >= data_len){
+            for (var i=0; i < data_len; ++i){
+                const k = labelsArray[i]
+                p[k] = dataArray[i];
+            }
+        } else { // if more data then labels, make them arrays 
+            for (var i=0; i < data_len; ++i){
+                const k = labelsArray[i % label_len]
+                if (typeof p[k] === 'undefined'){
+                    p[k] = [dataArray[i]];
+                } else {
+                    p[k].push(dataArray[i]);
+                }
+            }
         }
         return p; 
     },
@@ -327,4 +340,13 @@ module.exports = {
             return result;
         });
     },
+    getDateTime(){
+        let currentDate = new Date();
+        let time = currentDate.getHours() + ":" + currentDate.getMinutes() + ":" + currentDate.getSeconds();
+        let date = currentDate.getMonth()+1 + "-" + currentDate.getDate() + "-" + currentDate.getFullYear();
+        return `${date}_${time}`;
+    },
+    sleep(ms) {
+        return new Promise(resolve => setTimeout(resolve, ms));
+      }
 }

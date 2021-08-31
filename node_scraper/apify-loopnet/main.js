@@ -4,7 +4,7 @@ const db = require('../db');
 const assert = require('assert');
 require('dotenv').config();
 const ScrapeTools = require('../modules/scrapeTools.js');
-const { createCipher } = require('crypto');
+
 
 /** TODO 
  * 1. load target  ---> update meta table 
