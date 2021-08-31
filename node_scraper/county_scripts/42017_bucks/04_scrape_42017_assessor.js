@@ -30,16 +30,15 @@ const recaptchaCss = '.g-recaptcha';
 const recaptchaSubmitCss = '.ybtn.ybtn--primary';
 
 
-    
+var re_start = 40; // increment this by 10 for each run of the script 
 // =================== RUN FUNCTION =================== 
 // scrapes parcel numbers that match the re_pattern (to allow multi-threading)
-async function run(){
+async function run(_re_start){
     
     // Start browser, prep use-agent 
-    const args = ['--headless=false'];
     //const args = ['--proxy-server=socks5://127.0.0.1:9050'];
     console.log(`Launching browser...`);
-    const browser = await puppeteer.launch({ args }); 
+    const browser = await puppeteer.launch({ headless: true, slowMo: 0 }); 
     // let [page] = await browser.pages(); //use existing tab 
         
         /**
@@ -57,16 +56,18 @@ async function run(){
         */
 
     // Launch multiple tabs each assigned a batch of parcel_numbers (based on regexp patterns) 
-    var re_start = 40; // increment this by 10 for each run of the script 
-    for (i=re_start; i<(re_start+10); i++){ // run 10 tabs/pages at once 
+    for (i=_re_start; i<(_re_start+10); i++){ // run 10 tabs/pages at once 
         let _re_string = i < 10 ? `0${i}` : `${i}`; // number -> string (add leading zero if < 10)
         let re = new RegExp('^'+ _re_string, 'i'); // string -> regex pattern
-        scrape_batch(re, browser); // function call 
+        var x = scrape_batch(re, _re_start, browser)
     }
+    // close browser when all processes are finished 
+    // browser.close();
 };
 
-async function scrape_batch(re_pattern, browser){
+async function scrape_batch(re_pattern, _re_start, browser){
     var parcel_numbers = ['foobar']; // placeholder to start while loop 
+    let period_regex = new RegExp('\\.$'); // Some parcel numbers incorrectly end in a period
     while (parcel_numbers.length > 0) {
         await ScrapeTools.sleep(ScrapeTools.rand_num(1000,3000));
         var page = await browser.newPage();
@@ -81,18 +82,34 @@ async function scrape_batch(re_pattern, browser){
         parcel_numbers = parcel_numbers.filter(x => re_pattern.test(x)) // match regex pattern
         // console.log(`parcel_numbers ${JSON.stringify(parcel_numbers)}`);
         
-        while (true){ // break statement in catch error logic; 
-            let parcel_number = parcel_numbers.pop();
-            var p = await scrape_bucks_assessor(parcel_number, page);
-            
-            // save payload 
-            var r = await db.query(`INSERT INTO pcl_data.c42107_assessor(parcel_num, raw_data) \
-                VALUES ($1, $2::JSONB) ON CONFLICT (parcel_num) 
-                DO UPDATE set raw_data = EXCLUDED.raw_data
-                RETURNING parcel_num`, [parcel_number, p]);
+        if (parcel_numbers.length === 0){
+            console.log(`completed all parcel numbers in regex pattern: ${re_pattern}`)
+            await page.close();
+            return 0;
+        }
 
-            if (p['parcel'] === null){ // if API is blocked
-                console.log(`Request Blocked on Parcel Number ${parcel_number}. Payload is null, restarting browser... `);
+        while (true){ // break statement in catch error logic; 
+            let raw_parcel_number = parcel_numbers.pop();
+            // Some parcel numbers incorrectly end in a period
+            let parcel_number = raw_parcel_number.replace(period_regex, '')
+
+            var p = await scrape_bucks_assessor(parcel_number, _re_start, page);
+            if (p === -1){
+                run(_re_start);
+                await browser.close();
+            }
+
+            // save payload 
+            //console.log(`attempting to save parcel_number ${raw_parcel_number}, _parcel_num ${parcel_number}`)
+            var r = await db.query(`INSERT INTO pcl_data.c42107_assessor(parcel_num, _parcel_num, raw_data) \
+                VALUES ($1, $2, $3::JSONB) ON CONFLICT (parcel_num) 
+                DO UPDATE set raw_data = EXCLUDED.raw_data
+                RETURNING parcel_num`, [raw_parcel_number, parcel_number, p]);
+
+
+            // TODO - check url redirect for ending in OverLimit.aspx -> restart browser
+            if (p['parcel'] === null){ // if API is blocked or parcel number does not exist in assessor database
+                console.log(`Request Blocked on Parcel Number ${parcel_number}. Payload is null, restarting browser tab... `);
                 // await page.screenshot({path: `./screenshots/bucks_${ScrapeTools.getDateTime()}_${parcel_number}_null.png`, fullPage: true});
                 await page.close();
                 break;
@@ -106,12 +123,19 @@ async function scrape_batch(re_pattern, browser){
     return 0; // successfully processed all parcel_numbers
 }
 
-async function scrape_bucks_assessor(pcl_num, page){
+async function scrape_bucks_assessor(pcl_num, _re_start, page){
     // Create and navigate to new page 
     // console.log(`Open target page for parcel_number: ${pcl_num}`);
     var url = `http://www.buckscountyboa.org/Datalets/PrintDatalet.aspx?pin=${pcl_num}&gsp=PROFILEALL&taxyear=2021&jur=009&ownseq=0&card=1&roll=REAL&State=1&item=1&items=-1&all=all&ranks=Datalet`;
+    // console.log(`Open url: ${url}`);
     try{
         await page.goto(url,  {waitUntil: 'load', timeout: 30000})
+
+        const actual_url = await page.url();
+        if (actual_url.includes('OverLimit.aspx')){
+            console.log(`API blocked overlimit, restarting browser`)
+            return -1; 
+        }
 
         const _p = await page.evaluate(async () => {
             // Function needs to be defined here because it needs access to the DOM (document)
@@ -157,9 +181,9 @@ async function scrape_bucks_assessor(pcl_num, page){
         _p['source'] = url;
         return _p;
     } catch(e){
-        // await page.screenshot({path: `./screenshots/bucks_${ScrapeTools.getDateTime()}_${pcl_num}_request_err.png`, fullPage: true});
+        await page.screenshot({path: `./screenshots/bucks_${ScrapeTools.getDateTime()}_${pcl_num}_request_err.png`, fullPage: true});
         console.log(`error scraping page ${e}`)
     }
 }
 
-run();
+run(re_start);
