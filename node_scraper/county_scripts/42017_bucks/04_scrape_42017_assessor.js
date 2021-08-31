@@ -6,18 +6,15 @@
  *  $ brew services stop tor
  */
 
-//const puppeteer = require('puppeteer'); 
+// const puppeteer = require('puppeteer'); 
 const puppeteer = require('puppeteer-extra')  // Any number of plugins can be added through `puppeteer.use()`
 const StealthPlugin = require('puppeteer-extra-plugin-stealth')
 const RecaptchaPlugin = require('puppeteer-extra-plugin-recaptcha')
-
-const colors = require('colors/safe');
+// const colors = require('colors/safe');
 require('dotenv').config();
 const db = require('../../db');
 const ScrapeTools = require('../../modules/scrapeTools.js');
-const { prepPage } = require('../../modules/scrapeTools.js');
 
-/**
 puppeteer.use(StealthPlugin());  
 puppeteer.use(
     RecaptchaPlugin({
@@ -31,7 +28,7 @@ puppeteer.use(
 
 const recaptchaCss = '.g-recaptcha'; 
 const recaptchaSubmitCss = '.ybtn.ybtn--primary';
- */
+
 
 
 // =================== RUN FUNCTION =================== 
@@ -84,8 +81,7 @@ async function run(re_pattern){
 
             if (p['parcel'] === null){
                 console.log(`Request Blocked on Parcel Number ${parcel_number}. Payload is null, restarting browser... `);
-                let currentTime = ScrapeTools.getDateTime();
-                await page.screenshot({path: `./screenshots/bucks_${currentTime}_${parcel_number}_null.png`, fullPage: true});
+                // await page.screenshot({path: `./screenshots/bucks_${ScrapeTools.getDateTime()}_${parcel_number}_null.png`, fullPage: true});
                 blockedRequest = true
                 await browser.close();
                 break;
@@ -150,14 +146,13 @@ async function scrape_bucks_assessor(pcl_num, page){
         _p['source'] = url;
         return _p;
     } catch(e){
-        let currentTime = ScrapeTools.getDateTime();
-        await page.screenshot({path: `./screenshots/bucks_${currentTime}_${parcel_number}_request_err.png`, fullPage: true});
+        await page.screenshot({path: `./screenshots/bucks_${ScrapeTools.getDateTime()}_${parcel_number}_request_err.png`, fullPage: true});
         console.log(`error scraping page ${e}`)
     }
 }
 
 // Call function multiple times with different regexp patterns 
-var re_start = 20 // increment this by 10 for each run of the script 
+var re_start = 30; // increment this by 10 for each run of the script 
 for (i=re_start; i<(re_start+10); i++){ // run 10 threads at once 
     let _re_string = i < 10 ? `0${i}` : `${i}`; // number -> string (add leading zero if < 10)
     let re = new RegExp('^'+ _re_string, 'i'); // string -> regex pattern

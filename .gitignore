@@ -138,3 +138,4 @@ python_scraper/.env~
 python_scraper/app/__pycache__/
 python_scraper/venv/
 tmp/
+./screenshots
