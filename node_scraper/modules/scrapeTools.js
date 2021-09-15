@@ -43,6 +43,20 @@ const proxies = [
         '107.174.164.245:60099',
     ]
 
+/**
+     * @param {array} labelsArray 
+     * @param {array} dataArray 
+     * @returns {object}
+     */
+function zipObjectEqualLength(labelsArray, dataArray){ // returns object
+    var p = {};
+    for (var i=0; i < dataArray.length; ++i){
+        const k = labelsArray[i]
+        p[k] = dataArray[i];
+    }
+    return p; 
+}
+
 module.exports = {
     proxies,
     /**gets states that have not yet been scraped */
@@ -281,31 +295,21 @@ module.exports = {
             return arrays.map(function(array){return array[i]})
         });
     }, 
-    /**
-     * @param {array} labelsArray 
-     * @param {array} dataArray 
-     * @returns {object}
-     */
-    zipObject(labelsArray, dataArray){
+    // returns an array of objects 
+    zipObject(labelsArray, dataArray){ // when data array is longer and labels should be repeated 
+        var payload = [];
         var p = {};
         var label_len = labelsArray.length;
-        var data_len = dataArray.length;
-        if (label_len >= data_len){
-            for (var i=0; i < data_len; ++i){
-                const k = labelsArray[i]
-                p[k] = dataArray[i];
+        if (label_len >= dataArray.length){
+            p = zipObjectEqualLength(labelsArray, dataArray)
+            payload.push(p);
+        } else{
+            while(dataArray.length >= label_len){
+                p = zipObjectEqualLength(labelsArray, dataArray.splice(0, label_len));
+                payload.push(p);
             }
-        } else { // if more data then labels, make them arrays 
-            for (var i=0; i < data_len; ++i){
-                const k = labelsArray[i % label_len]
-                if (typeof p[k] === 'undefined'){
-                    p[k] = [dataArray[i]];
-                } else {
-                    p[k].push(dataArray[i]);
-                }
-            }
-        }
-        return p; 
+        } 
+        return payload; 
     },
     rand_num(min, max) {  
         return Math.floor(

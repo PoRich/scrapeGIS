@@ -29,8 +29,18 @@ puppeteer.use(
 const recaptchaCss = '.g-recaptcha'; 
 const recaptchaSubmitCss = '.ybtn.ybtn--primary';
 
+/*  
+// SQL code to remove invalid records 
+// (Need to redo records that are blocked for overlimit; 
+// some parcels may ligitimately be N/A where they exist in the GIS database, but not the assessors database)
 
-var re_start = 40; // increment this by 10 for each run of the script 
+    DELETE FROM pcl_data.c42017_assessor
+    WHERE raw_data #>> '{parcel}' IS NULL;
+    
+*/
+
+var re_start = 0 ; // increment this by 10 for each run of the script 
+var increment = 1;
 // =================== RUN FUNCTION =================== 
 // scrapes parcel numbers that match the re_pattern (to allow multi-threading)
 async function run(_re_start){
@@ -56,7 +66,7 @@ async function run(_re_start){
         */
 
     // Launch multiple tabs each assigned a batch of parcel_numbers (based on regexp patterns) 
-    for (i=_re_start; i<(_re_start+10); i++){ // run 10 tabs/pages at once 
+    for (i=_re_start; i<(_re_start+increment); i++){ // run 10 tabs/pages at once 
         let _re_string = i < 10 ? `0${i}` : `${i}`; // number -> string (add leading zero if < 10)
         let re = new RegExp('^'+ _re_string, 'i'); // string -> regex pattern
         var x = scrape_batch(re, _re_start, browser)
@@ -77,10 +87,10 @@ async function scrape_batch(re_pattern, _re_start, browser){
         await page.exposeFunction('zipObject', ScrapeTools.zipObject); // required for getTableData function
     
         // Get all parcel numbers in Bucks County, filter based on assigned regex pattern
-        var parcel_num_query = await db.query('select array(select parcel_num from pcl_data.c42107_gis except select parcel_num from pcl_data.c42107_assessor as a);'); 
+        var parcel_num_query = await db.query('select array(select parcel_num from pcl_data.c42107_gis except select parcel_num from pcl_data.c42017_assessor as a);'); 
         parcel_numbers = parcel_num_query['rows'][0]['array'];
-        parcel_numbers = parcel_numbers.filter(x => re_pattern.test(x)) // match regex pattern
-        // console.log(`parcel_numbers ${JSON.stringify(parcel_numbers)}`);
+        // Filter parcel numbers (when multithreading)
+        //parcel_numbers = parcel_numbers.filter(x => re_pattern.test(x)) // match regex pattern
         
         if (parcel_numbers.length === 0){
             console.log(`completed all parcel numbers in regex pattern: ${re_pattern}`)
@@ -89,22 +99,19 @@ async function scrape_batch(re_pattern, _re_start, browser){
         }
 
         while (true){ // break statement in catch error logic; 
-            let raw_parcel_number = parcel_numbers.pop();
-            // Some parcel numbers incorrectly end in a period
-            let parcel_number = raw_parcel_number.replace(period_regex, '')
-
+            let parcel_number = parcel_numbers.pop();
             var p = await scrape_bucks_assessor(parcel_number, _re_start, page);
-            if (p === -1){
+            
+            if (p === -1){ // -1 is error for when API is blocked due to Over Limit 
                 run(_re_start);
                 await browser.close();
             }
 
             // save payload 
-            //console.log(`attempting to save parcel_number ${raw_parcel_number}, _parcel_num ${parcel_number}`)
-            var r = await db.query(`INSERT INTO pcl_data.c42107_assessor(parcel_num, _parcel_num, raw_data) \
-                VALUES ($1, $2, $3::JSONB) ON CONFLICT (parcel_num) 
+            var r = await db.query(`INSERT INTO pcl_data.c42017_assessor(parcel_num, raw_data) \
+                VALUES ($1, $2::JSONB) ON CONFLICT (parcel_num) 
                 DO UPDATE set raw_data = EXCLUDED.raw_data
-                RETURNING parcel_num`, [raw_parcel_number, parcel_number, p]);
+                RETURNING parcel_num`, [parcel_number, p]);
 
 
             // TODO - check url redirect for ending in OverLimit.aspx -> restart browser
