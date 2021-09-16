@@ -125,8 +125,8 @@ dist
 ../.DS_Store
 .vscode/launch.json
 bash_scraper/scraper_error_log.txt
-node_scraper/package-lock.json
-node_scraper/package.json
+# node_scraper/package-lock.json
+# node_scraper/package.json
 .DS_Store
 .eslintrc.json
 .prettierrc.json
