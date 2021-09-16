@@ -1,4 +1,4 @@
-//  node county_scripts/42045_delaware/03_scrape_42045_assessor.js '01-01-'
+//  node county_scripts/42045_delaware/03_scrape_42045_assessor.js 1
 const fetch = require('node-fetch');
 const puppeteer = require('puppeteer-extra')  // Any number of plugins can be added through `puppeteer.use()`
 const StealthPlugin = require('puppeteer-extra-plugin-stealth')
@@ -41,9 +41,17 @@ async function gisPinToPin(gisPin){
 // db.query('Create Table pcl_data.c42045_assessor (gispin TEXT, parcel_num TEXT UNIQUE, raw_data JSONB);')
 
 // re_start is the regexp pattern to apply to the identifier 
-// 02-22-283:000
-var re_start = process.argv[2] ? process.argv[2] : 0; // increment this by 10 for each run of the script 
-var concurrent_tabs = 1;
+/*
+49-25-002:000
+49-25-001:000
+49-24-575:000
+..
+01-01-022:000
+01-01-004:000  
+*/
+
+var re_start = process.argv[2] ? parseInt(process.argv[2]) : 0; // increment this by 10 for each run of the script 
+var concurrent_tabs = 10;
 // =================== RUN FUNCTION =================== 
 // scrapes parcel numbers that match the re_pattern (to allow multi-threading)
 async function run(_re_start){    
@@ -52,17 +60,16 @@ async function run(_re_start){
     console.log(`Launching browser with regex start: ${_re_start}`);
     const browser = await puppeteer.launch({ headless: true, slowMo: 0 }); 
     // let [page] = await browser.pages(); //use existing tab 
-        
-    scrape_batch(re_start, re_start, browser)
-    /*
+    const upper_limit = _re_start + concurrent_tabs;
+    console.log(`_re_start ${_re_start} - upper_limit ${upper_limit}`);
     // Launch multiple tabs each assigned a batch of parcel_numbers (based on regexp patterns) 
-    for (i=0; i<(_re_start+concurrent_tabs); i++){ // run 10 tabs/pages at once 
-        // let _re_string = i < 10 ? `^0${i}` : `^${i}`; // number -> string (add leading zero if < 10)
-        _re_string = re_start;
+    for (i=_re_start; i<(upper_limit); i++){ // run 10 tabs/pages at once 
+        console.log(`i ${i}`);
+        let _re_string = i < 10 ? `^0${i}` : `^${i}`; // number -> string (add leading zero if < 10)
         // let re = new RegExp('^'+ _re_string, 'i'); // string -> regex pattern
         scrape_batch(_re_string, re_start, browser)
     }
-    */
+    
     // close browser when all processes are finished 
     // browser.close();
 };
