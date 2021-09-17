@@ -1,4 +1,6 @@
-//  node county_scripts/42045_delaware/03_scrape_42045_assessor.js 1
+//  node county_scripts/42045_delaware/03_scrape_42045_assessor.js 1 # increment in 10s
+//  node county_scripts/42045_delaware/03_scrape_42045_assessor.js 10 # increment in 10s
+
 const fetch = require('node-fetch');
 const puppeteer = require('puppeteer-extra')  // Any number of plugins can be added through `puppeteer.use()`
 const StealthPlugin = require('puppeteer-extra-plugin-stealth')
@@ -60,11 +62,11 @@ async function batch_process_parcel_nums(re_pattern){
     // check valid response from db 
     if (gispins?.length === 0){
         console.log(`completed all gispins in regex pattern: ${re_pattern}`)
-        await page.close();
+
         return 0;
     } else if (gispins == null){
         console.log(`no in matches for regex pattern: ${re_pattern}`)
-        await page.close();
+
         return 0;
     }
 
