@@ -1,12 +1,11 @@
-/*
-Download directly from Chester GIS API cycling through Objectids 
-$ node county_scripts/42029_chester/01_download_42029_gis.js
-*/
+// Download directly from Chester GIS API cycling through Objectids 
+// node county_scripts/42029_chester/01_download_42029_gis.js RUN 2x for special cases of OBJECTIDs <100
+// node county_scripts/42029_chester/01_download_42029_gis.js 0 # increment in 0
+// node county_scripts/42029_chester/01_download_42029_gis.js 100 # increment in 100
+// node county_scripts/42029_chester/01_download_42029_gis.js 200 # increment in 100
+
+
 const fetch = require('node-fetch');
-const fs = require('fs');
-// const scrapeTools = require('../../modules/scrapeTools');
-const exec = require('child_process').exec;
-// const format = require('pg-format');
 require('dotenv').config();
 const db = require('../../db')
 
@@ -15,7 +14,7 @@ const db = require('../../db')
 process.env['NODE_TLS_REJECT_UNAUTHORIZED'] = '0';   
 
 var county_fips = '42029';
-const STAGING_FOLDER = `/Users/Rich/Downloads/scrape_temp/${county_fips}`
+// const STAGING_FOLDER = `/Users/Rich/Downloads/scrape_temp/${county_fips}`
 
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
@@ -30,92 +29,69 @@ function checkStatus(res) {
   }
 }
 
-// UPI pattern is a-b-c.d 
-var incr = 1;
-var re_pattern = '1112';  // API will not return more than 200 records
-/**
- * 
- * make re_pattern specific enough to get less than 200 results per api call 
- * start with 4 digits, record # of matches and actual # of results returned
- * if results returned < matches then add another digit to re_pattern and iterate from there 
- */
+async function fetch_api(_re_pattern){
+  // * API will not return more than 200 records
+  // * make re_pattern specific enough to get less than 200 results per api call 
 
-async function download_geom(_re_pattern){
-  var url = `https://arcweb.chesco.org/CV3Service/CV3Service1.svc/JsonService/GetParcelAttributes/(%20UPPER(OBJECTID)%20LIKE%20UPPER('${_re_pattern}%3D%3D'))%20/PIN_MAP`;
+  // STEP 2A: RUN THIS ONCE TO GET objectids < 10
+  // var url = `https://arcweb.chesco.org/CV3Service/CV3Service1.svc/JsonService/GetParcelAttributes/(%20UPPER(OBJECTID)%20LIKE%20UPPER('_'))%20/PIN_MAP`
 
+  // STEP 2B: RUN THIS ONCE TO GET objectids 10 - 100
+  // var url = `https://arcweb.chesco.org/CV3Service/CV3Service1.svc/JsonService/GetParcelAttributes/(%20UPPER(OBJECTID)%20LIKE%20UPPER('__'))%20/PIN_MAP`
+
+  // STEP 3: get objectids 100 at a time  
+  var url = `https://arcweb.chesco.org/CV3Service/CV3Service1.svc/JsonService/GetParcelAttributes/(%20UPPER(OBJECTID)%20LIKE%20UPPER('${_re_pattern}__'))%20/PIN_MAP`
   const res = await fetch(url).then(res => checkStatus(res));  
-  // https://github.com/node-fetch/node-fetch/issues/396
-  // const res2 = await res.clone(); // doesn't work on large responses
 
   var jsonPayload = await res.json();
-  if (Object.keys(jsonPayload).includes('error')){
-    console.log(`_re_pattern ${_re_pattern} -> API error ${url}`); // Check API payload
-  } else if (Object.keys(jsonPayload).includes('COUNT')) {
-    console.log(`_re_pattern ${_re_pattern} payload length ${jsonPayload.PARCELS.length} / ${jsonPayload.COUNT} results`)
+  if (Object.keys(jsonPayload).includes('COUNT')) {
+    console.log(`_re_pattern ${_re_pattern} --> ${jsonPayload.PARCELS.length} results returned (${(jsonPayload.PARCELS.length / jsonPayload.COUNT)*100}%)`)
     if (jsonPayload.PARCELS.length > 0){ // only save if valid payload 
       jsonPayload.PARCELS.forEach(async (e) => {
-        const res = await db.query('INSERT INTO pcl_data.c42029_gis (OBJECTID, raw_data) VALUES ($1, $2)', [e.OBJECTID, e])
-        // console.log(`${e.OBJECTID} db query`)
+        const res = await db.query('INSERT INTO pcl_data.c42029_gis (objectid, match_count, result_count, raw_data) \
+          VALUES ($1, $2, $3, $4::JSONB) ON CONFLICT (objectid) DO NOTHING RETURNING objectid', [e.OBJECTID, jsonPayload.COUNT, jsonPayload.PARCELS.length, e])
+        
+        if (typeof res === 'undefined'){
+          console.log(`res undefined OBJECTID ${e.OBJECTID}`);
+        }
+        else if(res.rows.length>0){
+          console.log(`saved objectid ${res.rows[0]['objectid']} to db`);
+        } else{
+          console.log(`OBJECTID ${e.OBJECTID} - not saved`)
+        }
       })
-
-      //var DATA_DIR = `${STAGING_FOLDER}/c${county_fips}_gis_${_re_pattern}.json`;
-      //const dest = fs.createWriteStream(DATA_DIR); 
-      //await res.body.pipe(dest);
     }
   }
-
 }
 
-// download payload 
-(async ()=>{
-  // exec(`mkdir ${STAGING_FOLDER}`);
-  // exec(`cd ${STAGING_FOLDER}`);
-  await db.query('CREATE TABLE pcl_data.c42029_gis (OBJECTID TEXT, raw_data JSONB)');
-  while (re_pattern <= 100) { 
-    re_pattern_actual = re_pattern < 10 ? '0'+re_pattern: re_pattern;
-    await download_geom(re_pattern_actual)
-    
-    await sleep(10);
-    re_pattern += incr;  // Increment 
-  }
-})();
+
+// STEP 1: CREATE SQL TABLE ONCE 
+//await db.query('CREATE TABLE pcl_data.c42029_gis (objectid TEXT UNIQUE, match_count INT, result_count INT, raw_data JSONB)');
 
 
-/*
-testing 
+// run function  
+async function main(re_start){  
+  // STEP 2: FETCH API FOR 1 AND 2 DIGIT LONG OBJECT IDS (ALTER URL in funciton)
+  // await fetch_api(1) // RUN THIS ONCE 
+  
+  // STEP 3: FETCH API FOR 100 at a time (ALTER URL IN FUNCTION) - call this 1000 at a time 
+  for (i=re_start;i<(re_start + 100);i++){ await fetch_api(i)}
+};
 
-const fetch = require('node-fetch');
-process.env['NODE_TLS_REJECT_UNAUTHORIZED'] = '0';   
-(async()=>{
-  var _re_pattern = 1;
-  var url = `https://arcweb.chesco.org/CV3Service/CV3Service1.svc/JsonService/GetParcelAttributes/(%20UPPER(OBJECTID)%20LIKE%20UPPER('${_re_pattern}%3D%3D'))%20/PIN_MAP`
-  const res = await fetch(url);
-  var jsonPayload = await res.json();
-  console.log(`url: ${url}`);
-  if (Object.keys(jsonPayload).includes('error')){
-    console.log(`_re_pattern ${_re_pattern} -> API error ${url}`); // Check API payload
-  } else if (Object.keys(jsonPayload).includes('COUNT')) {
-    console.log(`_re_pattern ${_re_pattern} payload length ${jsonPayload.PARCELS.length} / ${jsonPayload.COUNT} results`)
-  }  
-})();
+main(parseInt(process.argv[2]));
 
+/* API REFERENCE 
+https://arcweb.chesco.org/CV3Service/CV3Service1.svc/JsonService/GetParcelAttributes/(%20UPPER(UPI)%20LIKE%20UPPER('1-1-%3D%3D'))%20%2FPIN_MAP
+https://arcweb.chesco.org/CV3Service/CV3Service1.svc/JsonService/GetParcelAttributes/(%20UPPER(OBJECTID)%20LIKE%20UPPER('1111%3D%3D'))%20/PIN_MAP 
 
-https://arcweb.chesco.org/cv3/Default_CV.html
+SQL REFERENCE 
+SELECT objectid -- , raw_data -- jsonb_pretty(raw_data)
+FROM pcl_data.c42029_gis 
+ORDER BY 1;
 
-// Scrape Parcel geom and list of parcel_nums
-https://arcweb.chesco.org/CV3Service/CV3Service1.svc/JsonService/GetParcelAttributes/(OWNER1%20LIKE%20'%3D%3DJOHNSON%3D%3D'%20OR%20OWNER2%20LIKE%20'%3D%3DJOHNSON%3D%3D')%20AND%20MUNI_ID%20%3D%2065/PIN_MAP
-https://arcweb.chesco.org/CV3Service/CV3Service1.svc/JsonService/GetParcelAttributes/(OWNER1%20LIKE%20'%3D%3DJOHNSON%3D%3D'%20OR%20OWNER2%20LIKE%20'%3D%3DJOHNSON%3D%3D')%20AND%20MUNI_ID%20%3D%2065/PIN_MAP
+select count(*) 
+FROM pcl_data.c42029_gis
+WHERE raw_data is not null;
 
-https://arcweb.chesco.org/CV3Service/CV3Service1.svc/JsonService/GetParcelAttributes/(%20UPPER(UPI)%20%3D%20UPPER('1')%20OR%20%20UPPER(UPI)%20LIKE%20UPPER('1-%3D%3D'))%20%2FPIN_MAP
-https://arcweb.chesco.org/CV3Service/CV3Service1.svc/JsonService/GetParcelAttributes/(%20UPPER(PIN_ASMNT)%20%3D%20UPPER('0109')%20OR%20%20UPPER(PIN_ASMNT)%20LIKE%20UPPER('0109%3D%3D'))%20/PIN_MAP
-
-Object ID starts with 1
-https://arcweb.chesco.org/CV3Service/CV3Service1.svc/JsonService/GetParcelAttributes/(%20UPPER(OBJECTID)%20LIKE%20UPPER('1%3D%3D'))%20/PIN_MAP 
-
-Use list of parcel_nums to scrape data 
-delcorealestate.co.delaware.pa.us/PT/Datalets/PrintDatalet.aspx?pin=30000157600&gsp=PROFILEALL_PUB&taxyear=2021&jur=023&ownseq=0&card=1&roll=REAL&State=1&item=1&items=-1&all=all&ranks=Datalet
-
-
-
-
+select * from pcl_data.c42029_gis where objectid='10068';
 */
