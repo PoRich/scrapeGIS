@@ -77,7 +77,7 @@ async function batch_process_parcel_nums(re_pattern){
         var db_response = await db.query('UPDATE pcl_data.c42045_gis set parcel_num = $1 WHERE pin = $2 RETURNING pin', [parcel_num, gispin]);
         console.log(`saved pin ${gispin} -> parcel_num ${parcel_num}`);
     }
-    console.log(`batch_process_parcel_nums COMPLETED JOB FOR re_patten ${re_patten}`);
+    console.log(`batch_process_parcel_nums COMPLETED JOB FOR re_patten`);
 }
 
 
@@ -95,7 +95,8 @@ async function scrape_batch(re_pattern, _re_start, browser){
             await page.exposeFunction('zipObject', ScrapeTools.zipObject); // required for getTableData function
         
             var parcel_num_query = await db.query('select array(select parcel_num from pcl_data.c42045_gis where parcel_num is not null \
-                and parcel_num ~* $1 except select parcel_num from pcl_data.c42045_assessor where raw_data is not null);', [re_pattern]); 
+                and parcel_num ~* $1 except select parcel_num from pcl_data.c42045_assessor where raw_data is not null \
+                and raw_data not in ($2, $3, $4));', [re_pattern, '-1', '-2', '-3']); 
             
             parcel_nums = parcel_num_query['rows'][0]['array'];
             
@@ -115,6 +116,11 @@ async function scrape_batch(re_pattern, _re_start, browser){
             while (true){ // break statement in catch error logic; 
                 try{
                     let parcel_number = parcel_nums.pop();
+                    
+                    if (typeof parcel_number === 'undefined'){
+                        continue; 
+                    }
+                    
                     // console.log(`re_pattern: ${re_pattern} -> gispin ${gispin} -> parcel_number ${parcel_number}`);
                     var p = await scrape_assessor(parcel_number, page);
                     
@@ -126,16 +132,16 @@ async function scrape_batch(re_pattern, _re_start, browser){
                         break;
                     } else if (p < -1){
                         console.log(`Warning: scrape_assessor error code ${p} -> (parcel_number: ${parcel_number})`);
+                    } else {
+                        // save payload 
+                        var r = await db.query(`INSERT INTO pcl_data.c42045_assessor(parcel_num, raw_data) \
+                            VALUES ($1, $2::JSONB) ON CONFLICT (parcel_num) 
+                            DO UPDATE set raw_data = EXCLUDED.raw_data
+                            RETURNING parcel_num`, [parcel_number, p]);
+                        
+                        // console.log(`${parcel_number} Payload - ${JSON.stringify(p)}`);     
+                        console.log(`${ScrapeTools.getDateTime()} - Saved payload ${p?.parcel !== null && p?.parcel !== '-2' && p?.parcel !== '-3'} - Parcel Number: ${JSON.stringify(r['rows'][0]['parcel_num'], null, '\t')}`)
                     }
-
-                    // save payload 
-                    var r = await db.query(`INSERT INTO pcl_data.c42045_assessor(parcel_num, raw_data) \
-                        VALUES ($1, $2::JSONB) ON CONFLICT (parcel_num) 
-                        DO UPDATE set raw_data = EXCLUDED.raw_data
-                        RETURNING parcel_num`, [parcel_number, p]);
-                    
-                    // console.log(`${parcel_number} Payload - ${JSON.stringify(p)}`);     
-                    console.log(`${ScrapeTools.getDateTime()} - Saved payload ${p?.parcel !== null} - Parcel Number: ${JSON.stringify(r['rows'][0]['parcel_num'], null, '\t')}`)
                     await ScrapeTools.sleep(ScrapeTools.rand_num(100,1000));
                 } catch (e){
                     console.log(`Scrape_batch error -> Breaking Loop, Closing Page | error message: ${e}`)
@@ -153,13 +159,13 @@ async function scrape_assessor(pcl_num, page){
     // console.log(`Open target page for parcel_number: ${pcl_num}`);
     var url = `http://delcorealestate.co.delaware.pa.us/PT/Datalets/PrintDatalet.aspx?pin=${pcl_num}&gsp=PROFILEALL_PUB&taxyear=2021&jur=023&ownseq=0&card=1&roll=REAL&State=1&item=1&items=-1&all=all&ranks=Datalet`;
     
-    console.log(`Open url: ${url}`);
+    // console.log(`Open url: ${url}`);
     try{
-        await page.goto(url,  {waitUntil: 'load', timeout: 60000})
+        await page.goto(url,  {waitUntil: 'load', timeout: 360000})
         // console.log(`page loaded`);
 
         const actual_url = await page.url();
-        console.log(`actual_url ${actual_url}`);
+        // console.log(`actual_url ${actual_url}`);
 
         if (actual_url.includes('OverLimit.aspx')){
             console.log(`************************ API blocked on parcel number ${pcl_num} overlimit, restarting browser ************************`)
@@ -224,7 +230,7 @@ async function run(_re_start, stage){
     if (stage === 'get_parcels'){
         // Start browser, prep use-agent 
         console.log(`Launching browser with regex start: ${_re_start}`);
-        const browser = await puppeteer.launch({ headless: false, slowMo: 0 }); 
+        const browser = await puppeteer.launch({ headless: true, slowMo: 0 }); 
         for (i=_re_start; i<(upper_limit); i++){ // run 10 tabs/pages at once 
             let _re_string = i < 10 ? `^0${i}` : `^${i}`; // number -> string (add leading zero if < 10)
             scrape_batch(_re_string, _re_start, browser)
