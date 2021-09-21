@@ -125,13 +125,14 @@ async function scrape_batch(re_pattern, _re_start, browser){
                     var p = await scrape_assessor(parcel_number, page);
                     
                     if (p === -1){ // -1 is error for when API is blocked due to Over Limit 
-                        console.log(`scrape_assessor error code ${p} -> Restarting Browswer (parcel_number: ${parcel_number})`);
+                        console.log(`scrape_assessor error code ${p} -> (parcel_number: ${parcel_number}). Restarting Browser`);
                         await browser.close();
                         await ScrapeTools.sleep(ScrapeTools.rand_num(3000, 5000));
-                        run(_re_start);
+                        run(_re_start, 'get_parcels');
                         break;
-                    } else if (p < -1){
-                        console.log(`Warning: scrape_assessor error code ${p} -> (parcel_number: ${parcel_number})`);
+                    } else if (p === -2){
+                        console.log(`Warning: scrape_assessor error code ${p} -> (parcel_number: ${parcel_number}). Closing Page`);
+
                     } else {
                         // save payload 
                         var r = await db.query(`INSERT INTO pcl_data.c42045_assessor(parcel_num, raw_data) \
@@ -214,9 +215,15 @@ async function scrape_assessor(pcl_num, page){
 
         return _p;
     } catch(e){
-        // await page.screenshot({path: `./screenshots/42045_${ScrapeTools.getDateTime()}_${pcl_num}_request_err.png`, fullPage: true});
-        console.log(`scrape_assessor failed to scrape page on parcel number : ${pcl_num} | error_message: ${e}`)
-        return -2;
+        if (e instanceof puppeteer?.errors.TimeoutError){
+            // await page.screenshot({path: `./screenshots/42045_${ScrapeTools.getDateTime()}_${pcl_num}_request_err.png`, fullPage: true});
+            console.log(`scrape_assessor TimeoutError on parcel number : ${pcl_num} | error_message: ${e}`)
+            return -1;
+        } else {
+            console.log(`scrape_assessor failed to scrape page on parcel number : ${pcl_num} | error_message: ${e}`)
+            return -2;
+        }
+ 
     }
 }
 
@@ -276,3 +283,12 @@ SANDBOX - node =================================================================
 */
 
 //  ============================================================================================================
+
+/*
+scrape_assessor failed to scrape page on parcel number : 02000170101 | error_message: TimeoutError: Navigation timeout of 360000 ms exceeded
+Warning: scrape_assessor error code -2 -> (parcel_number: 02000170101)
+
+
+scrape_assessor failed to scrape page on parcel number : 02000145103 | error_message: Error: Protocol error (Page.navigate): Session closed. Most likely the page has been closed.
+Warning: scrape_assessor error code -2 -> (parcel_number: 02000145103)
+*/
