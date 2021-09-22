@@ -134,7 +134,11 @@ async function run(_re_start, ){
     const upper_limit = _re_start + concurrent_tabs;
     // Start browser, prep use-agent 
     console.log(`Launching browser with regex start: ${_re_start}`);
-    const browser = await puppeteer.launch({ headless: true, slowMo: 0 }); 
+    const browser = await puppeteer.launch({ 
+        headless: true, 
+        slowMo: 0,
+        executablePath: '/usr/bin/chromium-browser'  // required on linux; leave out on mac
+    }); 
     for (i=_re_start; i<(upper_limit); i++){ // run 10 tabs/pages at once 
         let _re_string = i < 10 ? `^0${i}` : `^${i}`; // number -> string (add leading zero if < 10)
         scrape_batch(_re_string, _re_start, browser)
