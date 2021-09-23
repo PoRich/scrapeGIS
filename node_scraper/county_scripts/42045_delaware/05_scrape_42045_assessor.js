@@ -130,10 +130,13 @@ async function run(_re_start, stage){
     const upper_limit = _re_start + concurrent_tabs;
     if (stage === 'get_parcels'){
         // Start browser
-        const handler = new Handler({ maxConcurrency: 5 });
-        // const agent = handler.createAgent();
-        // await agent.goto('http://delcorealestate.co.delaware.pa.us/pt/search/commonsearch.aspx?mode=parid');
-
+        const handler = new Handler(
+            { maxConcurrency: 5 }, 
+            { maxConcurrency: 5, 
+              host: '192.168.1.185:33817'  // requires setting up server process 
+            } 
+            );
+        
         async function scrape_assessor(agent){
             try {// Create and navigate to new page 
                 await agent.configure({
@@ -252,7 +255,17 @@ async function get_parcel_nums_todo(re_pattern){
     return parcel_num_query['rows'][0]['array']; // parcel_numbers
 }
 
+// -- SETUP SECRET AGENT SERVER PROCESS  (on main ubuntu server)
+/** https://secretagent.dev/docs/advanced/remote/
+1) find open ports 
+$ sudo ss -ltnp 
 
+2) run server script 
+node ~/CSprojects/scrapeGIS/node_scraper/node_modules/@secret-agent/core/start.js [OPEN_PORT]
+
+3) run local script 
+
+*/
 
 
 /* SQL Query Reference
@@ -262,18 +275,7 @@ async function get_parcel_nums_todo(re_pattern){
  */
 
 // SANDBOX - node ============================================================================================================
-/**
-const agent =  require('secret-agent');
-(async() =>{    
-    const origin = 'http://delcorealestate.co.delaware.pa.us/pt/search/commonsearch.aspx?mode=parid';
-    const getUrl = `http://delcorealestate.co.delaware.pa.us/PT/Datalets/PrintDatalet.aspx?pin=03000033723&gsp=PROFILEALL_PUB&taxyear=2021&jur=023&ownseq=0&card=1&roll=REAL&State=1&item=1&items=-1&all=all&ranks=Datalet`;
-    
-    await agent.goto(origin);
-    const response = await agent.fetch(getUrl);
-    console.log(`response ${JSON.stringify(response)}`)
 
-})();
- */
 //  ============================================================================================================
 
 /*
