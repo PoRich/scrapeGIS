@@ -10,6 +10,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@secret-agent/chrome-88-0": "^4324.182.0",
     "colors": "^1.4.0",
     "dotenv": "^8.2.0",
     "node-fetch": "^2.6.1",

@@ -1,6 +1,6 @@
 #!/bin/bash
 export PGHOST=localhost
-export PGPORT=5432
+export PGPORT=63333
 export PGUSER=reiq
 export PGPASSWORD=$1
 export PGDATABASE=reiq

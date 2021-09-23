@@ -90,6 +90,8 @@ async function scrape_batch(re_pattern, _re_start, browser){
             await ScrapeTools.sleep(ScrapeTools.rand_num(1000,3000));
             var page = await browser.newPage();
             
+            page.setJavaScriptEnabled(false) // disable javascript (open print dialogue window)
+
             page = await ScrapeTools.preparePageForTests(page);
             page = await ScrapeTools.blockResources(page, ['font', 'media', 'image', 'other']);
             await page.exposeFunction('zipObject', ScrapeTools.zipObject); // required for getTableData function
@@ -123,7 +125,8 @@ async function scrape_batch(re_pattern, _re_start, browser){
                     
                     // console.log(`re_pattern: ${re_pattern} -> gispin ${gispin} -> parcel_number ${parcel_number}`);
                     var p = await scrape_assessor(parcel_number, page);
-                    
+                    // console.log(`${parcel_number} Payload - ${JSON.stringify(p)}`);     
+
                     if (p === -1){ // -1 is error for when API is blocked due to Over Limit 
                         console.log(`scrape_assessor error code ${p} -> (parcel_number: ${parcel_number}). Restarting Browser`);
                         await browser.close();
@@ -132,7 +135,6 @@ async function scrape_batch(re_pattern, _re_start, browser){
                         break;
                     } else if (p === -2){
                         console.log(`Warning: scrape_assessor error code ${p} -> (parcel_number: ${parcel_number}). Closing Page`);
-
                     } else {
                         // save payload 
                         var r = await db.query(`INSERT INTO pcl_data.c42045_assessor(parcel_num, raw_data) \
@@ -140,7 +142,7 @@ async function scrape_batch(re_pattern, _re_start, browser){
                             DO UPDATE set raw_data = EXCLUDED.raw_data
                             RETURNING parcel_num`, [parcel_number, p]);
                         
-                        // console.log(`${parcel_number} Payload - ${JSON.stringify(p)}`);     
+                        
                         console.log(`${ScrapeTools.getDateTime()} - Saved payload ${p?.parcel !== null && p?.parcel !== '-2' && p?.parcel !== '-3'} - Parcel Number: ${JSON.stringify(r['rows'][0]['parcel_num'], null, '\t')}`)
                     }
                     await ScrapeTools.sleep(ScrapeTools.rand_num(100,1000));
@@ -160,10 +162,18 @@ async function scrape_assessor(pcl_num, page){
     // console.log(`Open target page for parcel_number: ${pcl_num}`);
     var url = `http://delcorealestate.co.delaware.pa.us/PT/Datalets/PrintDatalet.aspx?pin=${pcl_num}&gsp=PROFILEALL_PUB&taxyear=2021&jur=023&ownseq=0&card=1&roll=REAL&State=1&item=1&items=-1&all=all&ranks=Datalet`;
     
+    await page.setRequestInterception(true);
+
     // console.log(`Open url: ${url}`);
     try{
-        await page.goto(url,  {waitUntil: 'load', timeout: 360000})
-        // console.log(`page loaded`);
+        await page.goto(url, {
+            waitUntil: 'networkidle2', //'load', // 'networkidle0', // 'domcontentloaded', 
+            timeout: 30000});
+        // await page.reload({waitUntil: 'networkidle2',  timeout: 0});  //'load', // 'networkidle0', // 'domcontentloaded',
+        // await page.waitFor(() => document.querySelectorAll('table[id="Parcel"], table[id="Owner"], table[id="Current Owner"], table[id="Owner History"], table[id="Original Current Year Assessment"]').length);
+        // await page.waitForSelector('table[id="Original Current Year Assessment"]', {timeout: 0});
+        
+        // await page.keyboard.press('Escape'); // escape print dialogue screen to force page to stop loading 
 
         const actual_url = await page.url();
         // console.log(`actual_url ${actual_url}`);
@@ -194,8 +204,7 @@ async function scrape_assessor(pcl_num, page){
                   return null;
                 }
             } 
-
-            return {
+            var payload = {
                 parcel: await getTableData('Parcel'),
                 owner: await getTableData('Owner'),
                 current_owner: await getTableData('Current Owner'),
@@ -210,20 +219,24 @@ async function scrape_assessor(pcl_num, page){
                 // COMMERCIAL FEATURES 
                 commercial: await getTableData('Commercial'), // within div id = datalet_div_0
                 }
+            return payload;
             }); 
         _p['source'] = url;
 
         return _p;
     } catch(e){
-        if (e instanceof puppeteer?.errors.TimeoutError){
+        console.log(`scrape_assessor (parcel number : ${pcl_num}) error_message: ${e}`)
+        return -1;
+        /*
+        if (e instanceof puppeteer?.errors?.TimeoutError){
             // await page.screenshot({path: `./screenshots/42045_${ScrapeTools.getDateTime()}_${pcl_num}_request_err.png`, fullPage: true});
-            console.log(`scrape_assessor TimeoutError on parcel number : ${pcl_num} | error_message: ${e}`)
+            console.log(`scrape_assessor TimeoutError on parcel number : ${pcl_num}`)
             return -1;
         } else {
-            console.log(`scrape_assessor failed to scrape page on parcel number : ${pcl_num} | error_message: ${e}`)
+            console.log(`scrape_assessor failed to scrape page on parcel number : ${pcl_num} `)
             return -2;
         }
- 
+        */
     }
 }
 
