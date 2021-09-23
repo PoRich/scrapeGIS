@@ -132,7 +132,7 @@ async function scrape_assessor(pcl_num, page){
 async function run(_re_start, ){    
     var concurrent_tabs = 10;
     const upper_limit = _re_start + concurrent_tabs;
-    // Start browser, prep use-agent 
+    // Start browser, prep use-agent w
     console.log(`Launching browser with regex start: ${_re_start}`);
     const browser = await puppeteer.launch({ 
         headless: true, 
@@ -148,7 +148,7 @@ async function run(_re_start, ){
 // =================== Create Table (Run Once)=================== 
 // db.query('Alter table pcl_data.c42029_gis add column sale_history JSONB;')
 // input is the argument given in the command line
-// DONE 0, 10 
+// DONE 0, 10, 20, 30, 40, 50
 run(process.argv[2] ? parseInt(process.argv[2]) : 0); // increment this by 10 for each run of the script 
 
 
