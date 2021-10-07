@@ -1,11 +1,18 @@
 from runpy import run_path
-SCRAPE_PATH = "/Users/Rich/CSprojects/scrapeGIS/python_scraper/app/scrape.py"
+# path from macbookAir
+#SCRAPE_PATH = "/Users/Rich/CSprojects/scrapeGIS/python_scraper/app/scrape.py" 
+# path from iMac
+SCRAPE_PATH = "/home/rsun/CSprojects/scrapegis/python_scraper/app/scrape.py" 
+
 scrape = run_path(SCRAPE_PATH)
 
-target_urls = {'properties': ['https://phl.carto.com/api/v2/sql?q=select%20*from%20opa_properties_public', 'json'],
+target_urls = {#'properties': ['https://phl.carto.com/api/v2/sql?q=select%20*from%20opa_properties_public', 'json'],
                 # assessments updated annually, market_value in properties dataset is the assessed value
                 # best to update by year
-                # 'assessments': ['https://phl.carto.com/api/v2/sql?q=SELECT%20*%20FROM%20assessments%20where%20year%20=2021', 'json']  
+                # 'assessments': ['https://phl.carto.com/api/v2/sql?q=SELECT%20*%20FROM%20assessments%20where%20year%20=2021', 'json'],  
+                #'assessments_2017': ['https://phl.carto.com/api/v2/sql?q=SELECT%20*%20FROM%20assessments%20where%20year%20=2017', 'json'],
+                'assessments_2016': ['https://phl.carto.com/api/v2/sql?q=SELECT%20*%20FROM%20assessments%20where%20year%20=2016', 'json'],  
+                'assessments_2015': ['https://phl.carto.com/api/v2/sql?q=SELECT%20*%20FROM%20assessments%20where%20year%20=2015', 'json'],  
                # 'assessments': ['https://opendata-downloads.s3.amazonaws.com/assessments.csv', 'csv']  # csv yielded fewer records and many blank records; unclear how reliable it is 
                }
 
