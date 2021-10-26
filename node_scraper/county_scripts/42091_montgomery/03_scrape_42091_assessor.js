@@ -96,7 +96,8 @@ async function scrape_batch(re_pattern, _re_start, browser){
             // Get all parcel numbers in Bucks County, filter based on assigned regex pattern
             
             var parcel_num_query = await db.query('select array(select taxpin from pcl_data.c42091_gis where taxpin is not null \
-                -- and taxpin ~* $1 except select parcel_num from pcl_data.c42091_assessor as a);', [re_pattern]); 
+                and taxpin ~* $1 except select parcel_num from pcl_data.c42091_assessor as a);', [re_pattern]); 
+
             
             parcel_numbers = parcel_num_query['rows'][0]['array'];
             // Filter parcel numbers (when multithreading)

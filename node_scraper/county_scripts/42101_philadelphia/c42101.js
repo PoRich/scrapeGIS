@@ -1,10 +1,21 @@
 /** From node_scraper directory run
- *  $ node county_scripts/c42101.js with the appropriate function calls below  
+ *  $ node county_scripts/42101_philadelphia/c42101.js with the appropriate function calls below  
+ * 
+ * https://stackoverflow.com/questions/55921442/how-to-fix-referenceerror-primordials-is-not-defined-in-node-js
+ * https://timonweb.com/javascript/how-to-fix-referenceerror-primordials-is-not-defined-error/
+ * 
+ * $ npm install -g n
+ * 
+ * # revert to older version of node
+ * $ sudo n 11.15.0  
+ * 
+ * # revert to newer version of node
+ * $ sudo n 14.16.0
 */
 
 if (process.env.NODE_ENV !== 'production') {
     require('dotenv').config();}
-const Shp2psql= require('../app/shp2psql.js');
+const Shp2psql= require('../../app/shp2psql.js');
 
 // catch uncaught exceptions
 process.on('uncaughtException', err =>{
@@ -24,7 +35,7 @@ const COUNTY_CODE = 'c42101';
 const shp_urls =  {
     "land_use": "http://data-phl.opendata.arcgis.com/datasets/e433504739bd41049de5d8f4a22d34ba_0.zip",  
     "dept_of_records": "http://data-phl.opendata.arcgis.com/datasets/1c57dd1b3ff84449a4b0e3fb29d3cafd_0.zip", 
-    "re_transfers": "https://phl.carto.com/api/v2/sql?filename=RTT_SUMMARY&format=shp&skipfields=cartodb_id&q=SELECT%20*%20FROM%20RTT_SUMMARY%20WHERE%20display_date%20%3E=%20%272020-01-01%27", 
+    "re_transfers_since_2020": "https://phl.carto.com/api/v2/sql?filename=RTT_SUMMARY&format=shp&skipfields=cartodb_id&q=SELECT%20*%20FROM%20RTT_SUMMARY%20WHERE%20display_date%20%3E=%20%272020-01-01%27", 
     "re_tax_delinquencies": "https://phl.carto.com/api/v2/sql?q=SELECT+*+FROM+real_estate_tax_delinquencies&filename=real_estate_tax_delinquencies&format=shp&skipfields=cartodb_id",
     "business_licenses": "https://phl.carto.com/api/v2/sql?q=SELECT+*+FROM+business_licenses&filename=business_licenses&format=shp&skipfields=cartodb_id",
     "building_permits": "https://phl.carto.com/api/v2/sql?filename=permits&format=shp&skipfields=cartodb_id&q=SELECT%20*%20FROM%20permits%20WHERE%20permitissuedate%20%3E=%20%272016-01-01%27",
@@ -131,4 +142,6 @@ for(var k in archive_shp_urls) {
 */
 
 // download water dept shp file 
-scrape_shp('c42101', 'water_dept', shp_urls['water_dept']);
+// scrape_shp('c42101', 'water_dept', shp_urls['water_dept']);
+
+scrape_shp('c42101', 're_transfers_since_2020', shp_urls['re_transfers_since_2020']);

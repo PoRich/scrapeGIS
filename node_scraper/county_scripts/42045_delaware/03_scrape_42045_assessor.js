@@ -1,5 +1,6 @@
 //  node county_scripts/42045_delaware/03_scrape_42045_assessor.js 0 # increment by 1 (matches on first leading digit of parcel_num)
 //  node county_scripts/42045_delaware/03_scrape_42045_assessor.js 1
+// DONE: 1, 3, 5
 const fetch = require('node-fetch');
 const {Handler, agent} =  require('secret-agent');
 require('dotenv').config();
@@ -52,8 +53,8 @@ async function gisPinToPin(gisPin, maxTries = 5){
 
 
 async function batch_process_parcel_nums(re_pattern){
-    var gispin_query = await db.query('select array(select pin from pcl_data.c42045_gis where pin is not null \
-        and pin ~* $1 and parcel_num is null);', [re_pattern]); 
+    var gispin_query = await db.query('select array(select pin from pcl_data.c42045_gis where pin is not null and parcel_num is null \
+        and pin ~* $1);', [re_pattern]); 
     var gispins = gispin_query['rows'][0]['array'];
     
     // check valid response from db 
@@ -131,8 +132,8 @@ async function run(_re_start, stage){
     if (stage === 'get_parcels'){
         // Start browser
         const handler = new Handler(
-            { maxConcurrency: 5 }, 
-            { maxConcurrency: 5, host: '192.168.1.185:33817'},  // db_main - requires setting up server process 
+            { maxConcurrency: 4 }, 
+            // { maxConcurrency: 8, host: '192.168.1.185:33817'},  // db_main - requires setting up server process 
             // { maxConcurrency: 5, host: '192.168.1.7:35705'}   // T_60 - TODO server setup 
             );
         
@@ -230,6 +231,7 @@ async function run(_re_start, stage){
     }    
 };
 
+
 // =================== Create Table (Run Once)=================== 
 // db.query('Alter table pcl_data.c42045_gis add column parcel_num TEXT;')
 // db.query('Create Table pcl_data.c42045_assessor (gispin TEXT, parcel_num TEXT UNIQUE, raw_data JSONB);')
@@ -237,10 +239,10 @@ async function run(_re_start, stage){
 // input is the argument given in the command line
 
 // STEP 1 - Get parcel numbers from gispins 
-// run(process.argv[2] ? parseInt(process.argv[2]) : 0, 'get_parcel_nums'); // increment this by 10 for each run of the script 
+run(process.argv[2] ? parseInt(process.argv[2]) : 0, 'get_parcel_nums'); // increment this by 10 for each run of the script 
 
 // STEP 2 - Get parcel data from parcel numbers
-run(process.argv[2] ? parseInt(process.argv[2]) : 0, 'get_parcels'); // increment this by 10 for each run of the script 
+// run(process.argv[2] ? parseInt(process.argv[2]) : 0, 'get_parcels'); // increment this by 10 for each run of the script 
 
 
 // Helper functions 
@@ -248,9 +250,15 @@ run(process.argv[2] ? parseInt(process.argv[2]) : 0, 'get_parcels'); // incremen
 async function get_parcel_nums_todo(re_pattern){
     // let _re_string = re_pattern < 10 ? `^0${re_pattern}` : `^${re_pattern}`; // match on first two leading digits: number -> string (add leading zero if < 10)
     let _re_string =`^${re_pattern}`; // match on single leading digit 
+    
     var parcel_num_query = await db.query('select array(select parcel_num from pcl_data.c42045_gis where parcel_num is not null \
         and parcel_num ~* $1 except select parcel_num from pcl_data.c42045_assessor where raw_data is not null \
         and raw_data not in ($2, $3, $4));', [_re_string, '-1', '-2', '-3']); 
+    /*
+    var parcel_num_query = await db.query('select array(select parcel_num from pcl_data.c42045_gis where parcel_num is not null \
+        except select parcel_num from pcl_data.c42045_assessor where raw_data is not null \
+        and raw_data not in ($1, $2, $3));', ['-1', '-2', '-3']); 
+    */
     return parcel_num_query['rows'][0]['array']; // parcel_numbers
 }
 
