@@ -239,10 +239,10 @@ async function run(_re_start, stage){
 // input is the argument given in the command line
 
 // STEP 1 - Get parcel numbers from gispins 
-run(process.argv[2] ? parseInt(process.argv[2]) : 0, 'get_parcel_nums'); // increment this by 10 for each run of the script 
+//run(process.argv[2] ? parseInt(process.argv[2]) : 0, 'get_parcel_nums'); // increment this by 10 for each run of the script 
 
 // STEP 2 - Get parcel data from parcel numbers
-// run(process.argv[2] ? parseInt(process.argv[2]) : 0, 'get_parcels'); // increment this by 10 for each run of the script 
+run(process.argv[2] ? parseInt(process.argv[2]) : 0, 'get_parcels'); // increment this by 10 for each run of the script 
 
 
 // Helper functions 
