@@ -312,7 +312,7 @@ async function savePagination(state_abbrev, county, city, ada_max_pages){
 async function saveDentist(state_abbrev, county, city, photo_src, specialty, raw_name, raw_phone, raw_addr, src, profile_url){
     try{
         await db.query('BEGIN');
-        const queryText = 'INSERT INTO dental_data.ada(state_abbrev, county, city, photo_src, specialty, dentist_name, phone, addr, src, profile_url) VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) ON CONFLICT ON CONSTRAINT ada_dentist_name_addr_key DO NOTHING RETURNING d_id';
+        const queryText = 'INSERT INTO biz_data.dental_ada(state_abbrev, county, city, photo_src, specialty, dentist_name, phone, addr, src, profile_url) VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) ON CONFLICT ON CONSTRAINT ada_dentist_name_addr_key DO NOTHING RETURNING d_id';
         const res = await db.query(queryText, [state_abbrev.toUpperCase(), county, city, photo_src, specialty, raw_name, raw_phone, raw_addr, src, profile_url]);
         await db.query('COMMIT');
     } catch (e) {
